@@ -1,0 +1,52 @@
+# ============================================================
+# 模块级模型路由配置（v1）
+# 原则：每个模块独立配置 模型 / 温度 / API Key / Base URL；
+#       Key 只走环境变量（变量名见 .env.example），禁止硬编码。
+# 注意：本项目为纯 Prompt 工程路线，本文件不含任何微调 / 训练字段。
+# 待确认：具体模型名称属于“关键决策点 2”，下方为占位示例。
+# ============================================================
+
+resume_diagnosis:          # 模块 A：简历诊断
+  model: deepseek-chat     # TODO: 决策点 2 确认后替换
+  temperature: 0.3
+  api_key_env: RESUME_DIAGNOSIS_API_KEY
+  base_url_env: RESUME_DIAGNOSIS_BASE_URL
+  timeout: 60
+  max_retries: 2
+  stream: false
+
+jd_matching:               # 模块 B：JD 匹配（两段式调用，低温保稳定）
+  model: deepseek-chat
+  temperature: 0.2
+  api_key_env: JD_MATCHING_API_KEY
+  base_url_env: JD_MATCHING_BASE_URL
+  timeout: 60
+  max_retries: 2
+  stream: false
+
+interview_agent:           # 模块 C：模拟面试（对话多样性 + 流式输出）
+  model: deepseek-chat
+  temperature: 0.8
+  api_key_env: INTERVIEW_AGENT_API_KEY
+  base_url_env: INTERVIEW_AGENT_BASE_URL
+  timeout: 120
+  max_retries: 3
+  stream: true
+
+evaluation:                # 模块 D：即时反馈（评分类用更强档位 + 固定低温）
+  model: glm-4-plus
+  temperature: 0.1
+  api_key_env: EVALUATION_API_KEY
+  base_url_env: EVALUATION_BASE_URL
+  timeout: 60
+  max_retries: 2
+  stream: false
+
+cross_review:              # 模块 D：交叉复核（与 evaluation 使用不同模型）
+  model: glm-4-flash
+  temperature: 0.1
+  api_key_env: CROSS_REVIEW_API_KEY
+  base_url_env: CROSS_REVIEW_BASE_URL
+  timeout: 60
+  max_retries: 2
+  stream: false
