@@ -1,13 +1,15 @@
 # ============================================================
-# 模块级模型路由配置（v1）
-# 原则：每个模块独立配置 模型 / 温度 / API Key / Base URL；
-#       Key 只走环境变量（变量名见 .env.example），禁止硬编码。
-# 注意：本项目为纯 Prompt 工程路线，本文件不含任何微调 / 训练字段。
-# 待确认：具体模型名称属于“关键决策点 2”，下方为占位示例。
+# 模块级模型路由配置（v2 · 2026-10-19）
+# 原则（决策④）：每个功能模块绑定一个独立模型——A/B/C/D 四个模块各用不同模型，
+#               模型 / 温度 / API Key / Base URL 均按模块独立配置；
+#               cross_review 与 evaluation 必须使用不同模型。
+# 说明：Key 只走环境变量（变量名见 .env.example），禁止硬编码；
+#       本项目为纯 Prompt 工程路线，本文件不含任何微调 / 训练字段；
+#       模型名称与温度为初版分配，A/B 实测后固化——改模型只改本文件。
 # ============================================================
 
-resume_diagnosis:          # 模块 A：简历诊断
-  model: deepseek-chat     # TODO: 决策点 2 确认后替换
+resume_diagnosis:          # 模块 A：简历诊断（中文生成 + 改写）
+  model: deepseek-chat     # DeepSeek-V3：中文生成/改写质量高、成本低、JSON 稳定
   temperature: 0.3
   api_key_env: RESUME_DIAGNOSIS_API_KEY
   base_url_env: RESUME_DIAGNOSIS_BASE_URL
@@ -16,7 +18,7 @@ resume_diagnosis:          # 模块 A：简历诊断
   stream: false
 
 jd_matching:               # 模块 B：JD 匹配（两段式调用，低温保稳定）
-  model: deepseek-chat
+  model: glm-4-air         # 智谱 GLM-4-Air：性价比高，适合结构化抽取 + 对齐评分
   temperature: 0.2
   api_key_env: JD_MATCHING_API_KEY
   base_url_env: JD_MATCHING_BASE_URL
@@ -24,8 +26,8 @@ jd_matching:               # 模块 B：JD 匹配（两段式调用，低温保�
   max_retries: 2
   stream: false
 
-interview_agent:           # 模块 C：模拟面试（对话多样性 + 流式输出）
-  model: deepseek-chat
+interview_agent:           # 模块 C：模拟面试（长对话 + 流式输出）
+  model: glm-4-flash       # 智谱 GLM-4-Flash（免费档）：撑 30–80K token 长对话
   temperature: 0.8
   api_key_env: INTERVIEW_AGENT_API_KEY
   base_url_env: INTERVIEW_AGENT_BASE_URL
@@ -33,8 +35,8 @@ interview_agent:           # 模块 C：模拟面试（对话多样性 + 流式�
   max_retries: 3
   stream: true
 
-evaluation:                # 模块 D：即时反馈（评分类用更强档位 + 固定低温）
-  model: glm-4-plus
+evaluation:                # 模块 D：即时反馈（评分类，用更强档位 + 极低温）
+  model: glm-4-plus        # 智谱 GLM-4-Plus：评分一致性优先
   temperature: 0.1
   api_key_env: EVALUATION_API_KEY
   base_url_env: EVALUATION_BASE_URL
@@ -42,8 +44,8 @@ evaluation:                # 模块 D：即时反馈（评分类用更强档位 
   max_retries: 2
   stream: false
 
-cross_review:              # 模块 D：交叉复核（与 evaluation 使用不同模型）
-  model: glm-4-flash
+cross_review:              # 模块 D：交叉复核（必须与 evaluation 使用不同模型）
+  model: deepseek-chat     # DeepSeek-V3：跨供应商复核，降低同源偏差
   temperature: 0.1
   api_key_env: CROSS_REVIEW_API_KEY
   base_url_env: CROSS_REVIEW_BASE_URL
