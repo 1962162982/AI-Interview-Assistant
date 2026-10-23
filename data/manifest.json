@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "dataset": "ai-interview-assistant/data",
+  "owner": "resume-jd",
+  "generated_at": "2026-10-23",
+  "notice": "全部素材由 LLM 虚构生成并已脱敏：姓名、电话、邮箱、学校、公司均为虚构或示例占位，不含任何真人简历与真实招聘数据；仅用于本项目 Prompt 评测与演示，不得用于真实招聘决策。",
+  "usage": {
+    "resumes": "模块 A 简历诊断的输入；与 paired_jd 组合可作为模块 B 两段式匹配的端到端输入；eval-guard 可直接复用为评测输入。",
+    "jds": "模块 B 第一步 JD 结构化抽取的输入；与 paired_resume 组合可做匹配评测。"
+  },
+  "resumes": [
+    {
+      "id": "resume_intern_01",
+      "module": "A",
+      "path": "data/resumes/resume_intern_01.txt",
+      "scene": "intern",
+      "scene_label": "实习",
+      "target_role": "后端开发实习生",
+      "paired_jd": "jd_intern_01",
+      "fictional": true,
+      "desensitized": true,
+      "notes": "覆盖 5 类典型问题：弱动词、成果无量化、JD 关键词未对齐（Redis/Docker）、教育时间线缺结束月份、错别字与中英标点混用；含 1 个可表扬亮点（课程项目独立完成）。"
+    },
+    {
+      "id": "resume_autumn_01",
+      "module": "A",
+      "path": "data/resumes/resume_autumn_01.txt",
+      "scene": "autumn",
+      "scene_label": "秋招",
+      "target_role": "前端开发工程师",
+      "paired_jd": "jd_autumn_01",
+      "fictional": true,
+      "desensitized": true,
+      "notes": "覆盖：量化缺失、弱动词、JD 关键词未对齐（TypeScript/React/Webpack）、项目缺难点与结果、错别字（兼容行）与格式问题。"
+    },
+    {
+      "id": "resume_grad_01",
+      "module": "A",
+      "path": "data/resumes/resume_grad_01.txt",
+      "scene": "grad",
+      "scene_label": "保研",
+      "target_role": "算法工程师（机器学习方向）/ 科研助理",
+      "paired_jd": "jd_grad_01",
+      "fictional": true,
+      "desensitized": true,
+      "notes": "覆盖：实验指标无数字、弱动词、JD 关键词未对齐（Transformer/分布式训练）、论文状态与科研结构表述不清、错别字（方按/清冼）。"
+    }
+  ],
+  "jds": [
+    {
+      "id": "jd_intern_01",
+      "module": "B",
+      "path": "data/jds/jd_intern_01.txt",
+      "scene": "intern",
+      "scene_label": "实习",
+      "title": "后端开发实习生",
+      "paired_resume": "resume_intern_01",
+      "fictional": true,
+      "notes": "含硬性（学历/毕业年份）、熟悉/了解多档要求与 2 条加分项，适合验证低温结构化抽取与逐项匹配。"
+    },
+    {
+      "id": "jd_autumn_01",
+      "module": "B",
+      "path": "data/jds/jd_autumn_01.txt",
+      "scene": "autumn",
+      "scene_label": "秋招",
+      "title": "前端开发工程师（2026 届秋招）",
+      "paired_resume": "resume_autumn_01",
+      "fictional": true,
+      "notes": "含框架选一（Vue3/React）、TypeScript/构建工具/性能优化等能力项与 2 条加分项。"
+    },
+    {
+      "id": "jd_grad_01",
+      "module": "B",
+      "path": "data/jds/jd_grad_01.txt",
+      "scene": "grad",
+      "scene_label": "保研",
+      "title": "算法工程师（机器学习方向 / 科研助理）",
+      "paired_resume": "resume_grad_01",
+      "fictional": true,
+      "notes": "含保研资格硬性条件、CNN/Transformer、PyTorch、英文文献写作及论文/竞赛加分项。"
+    }
+  ]
+}

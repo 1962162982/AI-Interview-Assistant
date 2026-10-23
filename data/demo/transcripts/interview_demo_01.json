@@ -1,0 +1,107 @@
+{
+  "demo_id": "demo_interview_01",
+  "note": "虚构示例：1 段历史面试对话记录（实习场景，5 轮）+ 评分与交叉复核结果，仅用于课程项目演示冷启动，不含真实个人信息。",
+  "created_at": "2026-10-23",
+  "scene": "intern",
+  "company": "某科技公司（虚构）",
+  "role": "后端开发实习生",
+  "resume_ref": "resumes/resume_demo_01_intern.md",
+  "jd_ref": "jds/jd_demo_backend_intern.md",
+  "transcript": [
+    {
+      "turn": 1,
+      "question": "请先做个自我介绍，并说明你为什么想找后端开发方向的实习？",
+      "answer": "我是某大学计算机科学与技术专业大三学生，做过两个课程项目，一个是选课系统，用 FastAPI 写了三个接口；另一个是二手交易平台，用 Flask 做了用户模块。我想找后端实习，是因为我对接口设计和性能优化比较感兴趣，也希望能参与真实业务系统。",
+      "rule_id": "self_intro",
+      "direction": "self_intro",
+      "follow_up_depth": 0
+    },
+    {
+      "turn": 2,
+      "question": "你提到选课系统「优化了接口性能，QPS 提升 3 倍」，能具体说说优化前是什么情况、你做了什么、结果怎么测出来的吗？",
+      "answer": "原来选课查询每次都会全表扫描，并发高的时候会比较慢。我加了一些索引，然后……嗯，就是数据库查询优化了一下，QPS 就上去了。测的话是用本地的工具压测的。",
+      "rule_id": "data_source",
+      "direction": "data_source",
+      "follow_up_depth": 1
+    },
+    {
+      "turn": 3,
+      "question": "具体是加了哪些索引？为什么加索引能让 QPS 提升 3 倍？优化前后的 P99 分别是多少？",
+      "answer": "我在选课表的课程 ID 上加了索引，这样查询课程的时候就不用全表扫描了。优化前没有记录 P99，大概是几百毫秒；优化后感觉快了很多。压测是单机用 wrk 压的，不过具体数字记不太清了。",
+      "rule_id": "depth_probe",
+      "direction": "depth_probe",
+      "follow_up_depth": 2
+    },
+    {
+      "turn": 4,
+      "question": "如果选课系统在开放选课的瞬间涌入 1 万名学生，你会怎么设计来避免数据库被打垮？",
+      "answer": "可以加缓存，把课程信息放到 Redis 里；然后用消息队列削峰，选课请求先入队再异步处理；数据库层面可以做读写分离和分库分表，但这些我还没有实际做过。",
+      "rule_id": "design_probe",
+      "direction": "design_probe",
+      "follow_up_depth": 3
+    },
+    {
+      "turn": 5,
+      "question": "今天的面试到这里，谢谢你的时间。你还有什么想问我的吗？",
+      "answer": "我想了解一下实习生入职后的培养方式和主要工作内容，以及团队目前在技术上的重点方向。",
+      "rule_id": "closing",
+      "direction": "closing",
+      "follow_up_depth": 0
+    }
+  ],
+  "evaluation": {
+    "dimensions": [
+      {
+        "dimension": "相关性",
+        "score": 8,
+        "evidence": [
+          "回答围绕后端开发实习展开，项目与岗位方向一致",
+          "最后的问题聚焦培养方式与技术方向，体现求职动机"
+        ]
+      },
+      {
+        "dimension": "结构性",
+        "score": 7,
+        "evidence": [
+          "项目介绍按「做过的项目 → 感兴趣的方向」组织",
+          "性能优化回答从背景切入，但收尾缺少结论句"
+        ]
+      },
+      {
+        "dimension": "具体性",
+        "score": 5,
+        "evidence": [
+          "「QPS 提升 3 倍」未给出优化前指标与测量方法",
+          "「加了一些索引」未说明索引字段与查询改写方式"
+        ]
+      },
+      {
+        "dimension": "岗位匹配",
+        "score": 7,
+        "evidence": [
+          "具备 Python / FastAPI / MySQL 实践，符合 JD 基本要求",
+          "Redis 缓存与高并发仅有概念了解，缺少落地经验"
+        ]
+      }
+    ],
+    "strengths": [
+      "能围绕项目讲清技术选型与个人参与部分",
+      "对性能优化与高并发方向有明确兴趣，回答方向正确"
+    ],
+    "weaknesses": [
+      "量化数据缺失：关键指标「3 倍」无法复现与验证",
+      "原理深度不足：索引与缓存问题停留在「加了就会变快」层面",
+      "回答收尾缺少总结，面试官需要自行提炼重点"
+    ],
+    "suggestions": [
+      "用 STAR 结构重答性能优化问题：背景指标 → 目标 → 具体动作 → 可验证结果",
+      "为每个项目准备 2–3 个可量化指标（QPS / P99 / 用户量）并保留测量方法",
+      "补齐 Redis 缓存设计基础：过期策略、缓存穿透 / 击穿、一致性处理"
+    ]
+  },
+  "cross_review": {
+    "agreed": true,
+    "adjustments": [],
+    "deviation_note": "复核模型（DeepSeek-V3，与评分模型不同）认可 4 个维度评分；仅建议「具体性」维持 5 分，理由为证据仅 2 条且偏弱。"
+  }
+}
