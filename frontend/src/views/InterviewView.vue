@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, isMockMode } from '../api/client'
 import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
@@ -30,6 +30,36 @@ const streaming = ref(false)
 const currentQuestion = ref(null)
 const sessionState = ref(null)
 let streamController = null
+let timerId = null
+const interviewStartedAt = ref(0)
+const elapsedSeconds = ref(0)
+const clockText = computed(() => {
+  const total = Math.max(0, elapsedSeconds.value)
+  const mm = String(Math.floor(total / 60)).padStart(2, '0')
+  const ss = String(total % 60).padStart(2, '0')
+  return `${mm}:${ss}`
+})
+
+function stopTimer() {
+  if (timerId) {
+    clearInterval(timerId)
+    timerId = null
+  }
+}
+
+function startTimer() {
+  stopTimer()
+  interviewStartedAt.value = Date.now()
+  elapsedSeconds.value = 0
+  timerId = setInterval(() => {
+    elapsedSeconds.value = Math.floor((Date.now() - interviewStartedAt.value) / 1000)
+  }, 1000)
+}
+
+onUnmounted(() => {
+  stopTimer()
+  streamController?.abort()
+})
 
 const busy = computed(() => phase.value === 'creating' || phase.value === 'ending')
 const canSend = computed(() => phase.value === 'chatting' && !streaming.value && answer.value.trim().length > 0)
@@ -62,6 +92,7 @@ async function startInterview() {
     addSession({ sessionId: data.session_id, scene: scene.value, role: '后端开发实习生', company: '某科技公司' })
     notice.value = `会话已创建：${data.session_id}（已记录到本地历史）`
     phase.value = 'chatting'
+    startTimer()
   } catch (error) {
     if (error.cancelled) notice.value = '已取消创建会话。'
     else errorMessage.value = error.message
@@ -121,6 +152,7 @@ async function endInterview() {
   errorMessage.value = ''
   try {
     await api.endSession(sessionId.value)
+    stopTimer()
     notice.value = '面试已结束，正在跳转报告页…'
     router.push({ path: '/report', query: { session: sessionId.value } })
   } catch (error) {
@@ -222,6 +254,7 @@ async function endInterview() {
             <li><span class="idx">题</span><span>当前题目：{{ currentQuestion?.question_id || '--' }}</span></li>
             <li><span class="idx">深</span><span>追问深度：{{ currentQuestion?.follow_up_depth ?? '--' }}</span></li>
             <li><span class="idx">轮</span><span>已进行：{{ sessionState?.turn_index ?? 0 }} 轮</span></li>
+            <li><span class="idx">时</span><span>面试用时：{{ clockText }}</span></li>
             <li><span class="idx">量</span><span>上下文占用：{{ sessionState?.context_usage_pct ?? 0 }}%</span></li>
             <li><span class="idx">ID</span><span>会话：<code>{{ sessionId || '--' }}</code></span></li>
           </ul>
@@ -231,6 +264,7 @@ async function endInterview() {
           <p class="muted">direction：<code>{{ currentQuestion.direction }}</code></p>
           <p class="muted">follow_up_depth：{{ currentQuestion.follow_up_depth }}</p>
           <p class="muted">命中追问决策树后，后端返回对应 rule_id / direction，便于联调核对。</p>
+          <p class="muted">追问提示：同一方向连续追问 ≥2 次将强制换向（D5），单方向深度上限 3。</p>
         </div>
         <div class="form-card">
           <h3 class="section-title">上下文管理</h3>
