@@ -69,7 +69,7 @@
 ├── evaluation/              # ⭐⭐ 核心资产二：金标准样本 + run_eval.py 强制回归关卡
 ├── data/                    # 素材库（LLM 虚构样例）：resumes / jds / questions / demo
 ├── frontend/                # 交互层：Vue 3 + Vite 五页骨架 + API 层（可切 mock）
-├── tests/                   # 279 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
+├── tests/                   # 286 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
 └── docs/                    # api.md（契约冻结）/ architecture.md / decision_log.md
 ```
 
@@ -81,12 +81,12 @@
 - Prompt v2：A/B/C/D 全部模块 + 三场景变体（10 个文件，全部带版本注释）。
 - 评测：`evaluation/` 金标准样本（3 份简历 + 10 条 Q&A）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）。
 - 前端：Vue 3 + Vite 五页骨架 + `src/api/client.js`（按冻结契约，可切真实后端 / mock）；`vite build` 已验证通过。
-- 测试与契约：`docs/api.md` 契约冻结；全仓 **279 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路已另测（见下）。
+- 测试与契约：`docs/api.md` 契约冻结；全仓 **286 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路已另测（见下）。
 
 **真实联调已验证（2026-10-23 · 临时全 DeepSeek 模式）**
 - `scripts/smoke_deepseek.py`：模块 A 真实诊断/结构化 + cross_review 真实调用全部通过（exit=0）；
 - API 全链路真实调用 200：结构抽取 → 诊断 → JD 提取/匹配 → 模拟面试（含 SSE 流式）→ 报告生成/查询/Markdown，单次 E2E 约 252s；
-- Prompt 真实回归：`evaluation/run_eval.py --real` 子集运行，结果记录于 `docs/decision_log.md`（全量待跑）。
+- Prompt 真实回归：`run_eval.py --real` 子集尝试中止——v_old（`evaluation/prompt_baselines/scoring_v1.md`，按 GLM 调优的 v1 基线）在 DeepSeek-V4-Pro 下无法产出合法 JSON；v_new（scoring v2）已在 E2E 报告链路产出合法 4 维评分。待恢复决策④配置（GLM 评分模型）后重跑全量回归，详见 `docs/decision_log.md`。
 
 **待完成**
 - 恢复双供应商混用：补 GLM Key 后删除 `.env` 的 `MODELS_CONFIG_PATH` 切回 `models.yaml`（决策④），并按铁律跑全量真实评测回归；

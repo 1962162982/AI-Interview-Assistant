@@ -124,6 +124,11 @@
 
 - **恢复方式**：删除 / 注释 `.env` 中 `MODELS_CONFIG_PATH` 即回到决策④配置；恢复前需补齐 GLM Key，并按铁律先跑真实评测回归（分数不降才切换）。
 - **约束**：本模式仅用于“先跑通模型链路”的联调；`models.yaml`（决策④）保持不变，不得把临时映射写进 README 的模型策略表或结题结论。
+- **真实链路验证结果（2026-10-23）**：
+  - `scripts/smoke_deepseek.py` exit=0：模块 A 诊断（v4-pro，75.7s，7 条问题）、结构化（49.5s）、cross_review（flash，15.9s，verdict=adjust）；
+  - API 全链路真实调用 200（约 252s）：`/api/meta/routes` → `resume/structure` → `resume/diagnose` → `jd/structure` → `jd/match` → `interview/sessions` → `turns/stream`(SSE) → `get` → `end` → `report/generate` → `get` → `markdown`；
+  - **Prompt 真实回归未完成（非 v2 回归，属临时模型/基线不匹配）**：`run_eval.py --real` 子集（3 样本 × 3 档）在 v_old（`evaluation/prompt_baselines/scoring_v1.md`，按 GLM 调优的历史 v1 基线）阶段中止——DeepSeek-V4-Pro 对该 Prompt 的输出不满足 `InterviewEvaluation`（`dimensions` 实际 0 项 / weaknesses、suggestions 类型不符）；v_new（`prompts/scoring.md` v2）在 E2E 报告链路中已产出合法 4 维评分。
+  - **结论**：临时全 DeepSeek 模式下无法完成“同一模型下 v1 vs v2”的回归比较；Prompt v2 维持“临时提交”口径（见 2026-10-23 阶段 1 记录）。待 GLM Key 到位、恢复决策④原配置后，按铁律重跑全量真实回归，再决定 v2 固化或回滚。
 
 ## 关键决策点总览
 
