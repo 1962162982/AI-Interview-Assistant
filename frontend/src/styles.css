@@ -993,6 +993,31 @@ code {
   white-space: nowrap;
 }
 
+/* ---------- JD 匹配报告（独立页面） ---------- */
+.capability-list li,
+.gap-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px dashed #e3ebf5;
+}
+
+.capability-list li:last-child,
+.gap-list li:last-child {
+  border-bottom: none;
+}
+
+.capability-list .badge {
+  align-self: flex-start;
+}
+
+.capability-detail {
+  color: #5b6b82;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 820px) {
   .app-header {

@@ -13,24 +13,35 @@
  */
 const STORAGE_KEY = 'aia.history.v1'
 const DIAGNOSIS_KEY = 'aia.resumeDiagnosis.v1'
+const JD_MATCH_KEY = 'aia.jdMatch.v1'
 const MAX_ITEMS = 10
 
 function emptyState() {
-  return { resume: null, sessions: [], reports: [], resumeDiagnosis: null }
+  return { resume: null, sessions: [], reports: [], resumeDiagnosis: null, jdMatch: null }
 }
 
-function readDiagnosis() {
+function readJsonKey(key) {
   const storage = getStorage()
   if (!storage) return null
   try {
-    const raw = storage.getItem(DIAGNOSIS_KEY)
+    const raw = storage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object' || !parsed.report) return null
+    if (!parsed || typeof parsed !== 'object') return null
     return parsed
   } catch {
     return null
   }
+}
+
+function readDiagnosis() {
+  const parsed = readJsonKey(DIAGNOSIS_KEY)
+  return parsed && parsed.report ? parsed : null
+}
+
+function readJdMatch() {
+  const parsed = readJsonKey(JD_MATCH_KEY)
+  return parsed && parsed.result ? parsed : null
 }
 
 function getStorage() {
@@ -56,6 +67,7 @@ export function loadHistory() {
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions.slice(0, MAX_ITEMS) : [],
       reports: Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_ITEMS) : [],
       resumeDiagnosis: readDiagnosis(),
+      jdMatch: readJdMatch(),
     }
   } catch {
     return emptyState()
@@ -152,6 +164,29 @@ export function getResumeDiagnosis() {
   return readDiagnosis()
 }
 
+/** 保存最近一次 JD 匹配结果（匹配成功后调用，供独立匹配报告页读取） */
+export function saveJdMatch({ result, resumeText = '', jdText = '' }) {
+  const storage = getStorage()
+  if (!storage || !result) return getJdMatch()
+  const payload = {
+    result,
+    resumeText: String(resumeText || ''),
+    jdText: String(jdText || ''),
+    savedAt: new Date().toISOString(),
+  }
+  try {
+    storage.setItem(JD_MATCH_KEY, JSON.stringify(payload))
+  } catch {
+    // 配额不足等异常不影响主流程
+  }
+  return payload
+}
+
+/** 读取最近一次 JD 匹配结果（独立报告页 / 首页入口使用） */
+export function getJdMatch() {
+  return readJdMatch()
+}
+
 /** 清空本地历史（首页「清空历史」按钮） */
 export function clearHistory() {
   const storage = getStorage()
@@ -159,6 +194,7 @@ export function clearHistory() {
   try {
     storage.removeItem(STORAGE_KEY)
     storage.removeItem(DIAGNOSIS_KEY)
+    storage.removeItem(JD_MATCH_KEY)
   } catch {
     // ignore
   }

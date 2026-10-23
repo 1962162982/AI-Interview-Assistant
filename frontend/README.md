@@ -1,6 +1,6 @@
 # frontend/ · 交互层（Vue 3 + Vite）
 
-> 决策①：Web 应用（FastAPI 后端 + Vue 3 / Vite 前端）。页面路由：**首页 / 简历诊断 / 诊断报告（独立页）/ JD 匹配 / 模拟面试 / 反馈报告**。
+> 决策①：Web 应用（FastAPI 后端 + Vue 3 / Vite 前端）。页面路由：**首页 / 简历诊断 / 诊断报告（独立页）/ JD 匹配 / JD 匹配报告（独立页）/ 模拟面试 / 反馈报告**。
 >
 > 当前状态（阶段 3 + 阶段 5 加分项）：**已从 Mock 切换到真实后端联调**——5 个页面按 `docs/api.md` 契约调用真实 `/api` 接口，
 > 面试页使用 SSE 增量渲染，首页展示真实 `/api/meta/routes` 与 localStorage 历史；JD 匹配页新增 **SVG 手绘 5 维能力雷达图**（无第三方库，
@@ -16,7 +16,8 @@
 | `/` | `src/views/HomeView.vue` | 首页 | 产品导览与四步流程入口、本地历史（简历 / 诊断报告 / 会话 / 报告） | 无 |
 | `/resume` | `src/views/ResumeView.vue` | A 简历诊断 | PDF/DOCX 上传解析（含 degraded 提示）、粘贴文本降级、发起诊断、最近诊断入口、可取消请求 | `POST /api/resume/parse`、`/structure`、`/diagnose` |
 | `/resume-report` | `src/views/ResumeReportView.vue` | A 诊断报告 | **独立整页报告**：总体评价、亮点、按优先级分组的问题 / 原文证据 / 改写建议、复制改写、重新诊断 | `POST /api/resume/diagnose`（数据经本地历史传递） |
-| `/jd` | `src/views/JdMatchView.vue` | B JD 匹配 | 简历文本（优先取本地历史）、JD 输入、匹配度 / 能力项覆盖 / 差距清单、**SVG 5 维能力雷达图**、可取消请求 | `POST /api/jd/structure`、`/match` |
+| `/jd` | `src/views/JdMatchView.vue` | B JD 匹配 | 简历文本（优先取本地历史）、JD 输入、发起匹配、最近匹配入口、可取消请求 | `POST /api/jd/structure`、`/match` |
+| `/jd-report` | `src/views/JdMatchReportView.vue` | B 匹配报告 | **独立整页报告**：匹配度 / 能力项 / 差距指标、5 维能力雷达图、逐项对比、差距清单、去模拟面试 | `POST /api/jd/match`（数据经本地历史传递） |
 | `/interview` | `src/views/InterviewView.vue` | C 模拟面试 | 三场景（实习 `intern` 默认 / 秋招 `autumn` / 保研 `grad`）、SSE 逐字渲染、计时与追问提示、防重复提交、停止生成、结束面试 | `POST /api/interview/sessions`、`.../turns`、`.../turns/stream`、`GET .../{sid}`、`POST .../{sid}/end` |
 | `/report` | `src/views/ReportView.vue` | D 即时反馈 | 生成新报告（需确认）/ 查看历史报告、维度分 + 证据、交叉复核、Markdown 导出 | `POST /api/report/generate`、`GET /api/report/{rid}`、`GET .../markdown` |
 
@@ -38,7 +39,7 @@ frontend/
     ├── main.js                 # 入口
     ├── App.vue                 # 布局 + 导航 + 当前模式标记（Mock / 真实后端）
     ├── styles.css              # 蓝白学术调性设计系统
-    ├── router/index.js         # 6 个页面路由（含独立诊断报告页）
+    ├── router/index.js         # 7 个页面路由（含独立诊断 / 匹配报告页）
     ├── data/samples.js         # 虚构示例简历 / JD（联调兜底素材）
     ├── stores/history.js       # localStorage 历史：最近简历 / session_id / report_id
     ├── utils/radar.js          # ★ JD 匹配雷达图数据推导（纯函数，可 Node 单测）

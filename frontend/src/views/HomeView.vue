@@ -98,6 +98,9 @@ onMounted(() => {
         <div v-if="historyState.resumeDiagnosis" class="panel-actions">
           <RouterLink class="button ghost" to="/resume-report">查看最近诊断报告 →</RouterLink>
         </div>
+        <div v-if="historyState.jdMatch" class="panel-actions">
+          <RouterLink class="button ghost" to="/jd-report">查看最近 JD 匹配报告 →</RouterLink>
+        </div>
       </div>
 
       <div class="form-card">

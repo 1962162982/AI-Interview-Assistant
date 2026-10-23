@@ -28,6 +28,12 @@ const routes = [
     meta: { title: 'JD 匹配' },
   },
   {
+    path: '/jd-report',
+    name: 'jdReport',
+    component: () => import('../views/JdMatchReportView.vue'),
+    meta: { title: 'JD 匹配报告' },
+  },
+  {
     path: '/interview',
     name: 'interview',
     component: () => import('../views/InterviewView.vue'),

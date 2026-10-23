@@ -1,14 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
-import { formatTimestamp, getResume, saveResume } from '../stores/history'
-import { buildRadarData } from '../utils/radar'
+import { formatTimestamp, getJdMatch, getResume, saveJdMatch, saveResume } from '../stores/history'
 
-// 模块 B JD 匹配：真实调用 /api/jd/match（两段式由后端编排，契约 docs/api.md「四」）。
-// 简历优先取本地历史（简历诊断页保存）；没有则回退示例简历并提示。
-const STATUS_LABELS = { matched: '已覆盖', partial: '部分覆盖', missing: '缺失' }
-
+// JD 匹配：真实调用 /api/jd/match；匹配成功后保存结果并跳转到独立的「JD 匹配报告」页。
+const router = useRouter()
 const storedResume = getResume()
 const resumeText = ref(storedResume?.text || SAMPLE_RESUME_TEXT)
 const resumeSource = computed(() =>
@@ -17,23 +15,13 @@ const resumeSource = computed(() =>
     : '示例简历（尚未在「简历诊断」页解析 / 粘贴）',
 )
 const jdText = ref('')
-const phase = ref('idle') // idle | matching | done
+const phase = ref('idle') // idle | matching
 const errorMessage = ref('')
 const notice = ref('')
-const result = ref(null)
+const lastMatch = ref(getJdMatch())
 let activeController = null
 
 const busy = computed(() => phase.value === 'matching')
-
-// 雷达图：数据推导规则集中写在 src/utils/radar.js（纯函数，可单测）；
-// 真实/mock 两种模式的 /api/jd/match 响应同构，因此都会出图。
-const hoveredIndex = ref(null)
-const radarData = computed(() => buildRadarData(result.value))
-const radarAriaLabel = computed(() => {
-  if (!radarData.value) return 'JD 匹配能力雷达图：暂无能力项数据'
-  const parts = radarData.value.dimensions.map((dimension) => `${dimension.label} ${dimension.value} 分`)
-  return `JD 匹配能力雷达图（满分 10 分）：${parts.join('；')}`
-})
 
 const pipeline = [
   { step: '①', title: '拆解岗位要求', detail: '从 JD 中拆出职责与能力项，明确岗位真正看重什么' },
@@ -69,14 +57,19 @@ async function match() {
   const localController = new AbortController()
   activeController = localController
   try {
-    result.value = await api.jdMatch({
+    const result = await api.jdMatch({
       resume_text: resumeText.value.trim(),
       jd_text: jdText.value.trim(),
     }, { signal: localController.signal })
-    hoveredIndex.value = null
     saveResume({ text: resumeText.value, source: 'paste' })
-    phase.value = 'done'
-    notice.value = '匹配完成：匹配度与差距清单仅供参考，建议结合人工判断。'
+    lastMatch.value = saveJdMatch({
+      result,
+      resumeText: resumeText.value.trim(),
+      jdText: jdText.value.trim(),
+    })
+    notice.value = '匹配完成，正在打开完整匹配报告…'
+    phase.value = 'idle'
+    router.push('/jd-report')
   } catch (error) {
     if (error.cancelled) notice.value = '已取消匹配请求。'
     else errorMessage.value = error.message
@@ -150,136 +143,21 @@ async function match() {
           </ul>
         </div>
 
-        <template v-if="result">
-          <div class="metric-grid">
-            <div class="metric">
-              <div class="label">匹配度</div>
-              <div class="value">{{ result.score }}<small>/ 100</small></div>
-            </div>
-            <div class="metric">
-              <div class="label">能力项</div>
-              <div class="value">{{ result.items?.length ?? 0 }}<small>项</small></div>
-            </div>
-            <div class="metric">
-              <div class="label">差距</div>
-              <div class="value">{{ result.gaps?.length ?? 0 }}<small>项</small></div>
-            </div>
-          </div>
-
-          <div class="form-card radar-card">
-            <h3 class="section-title">能力雷达图</h3>
+        <div class="form-card">
+          <h3 class="section-title">最近一次匹配</h3>
+          <template v-if="lastMatch?.result">
+            <p class="muted">时间：{{ formatTimestamp(lastMatch.savedAt) }}</p>
             <p class="muted">
-              从 5 个维度展示你与岗位要求的匹配情况；悬停顶点可看数值与计算口径，右侧文本列表为等价信息。
+              匹配度：{{ lastMatch.result.score }} / 100 · 能力项 {{ lastMatch.result.items?.length || 0 }} 项 ·
+              差距 {{ lastMatch.result.gaps?.length || 0 }} 项
             </p>
-            <div v-if="radarData" class="radar-layout">
-              <svg class="radar-svg" :viewBox="radarData.viewBox" role="img" :aria-label="radarAriaLabel">
-                <title>JD 匹配能力雷达图</title>
-                <!-- 网格环（20% / 40% / 60% / 80% / 100%） -->
-                <polygon
-                  v-for="ring in radarData.rings"
-                  :key="`ring-${ring.level}`"
-                  :points="ring.points"
-                  class="radar-grid"
-                />
-                <!-- 轴线 -->
-                <line
-                  v-for="(axis, index) in radarData.axes"
-                  :key="`axis-${index}`"
-                  :x1="radarData.center.x"
-                  :y1="radarData.center.y"
-                  :x2="axis.x"
-                  :y2="axis.y"
-                  class="radar-axis"
-                />
-                <!-- 数据多边形 -->
-                <polygon :points="radarData.polygon" class="radar-area" />
-                <!-- 数据点 + 轴标签（标签内含数值） -->
-                <g
-                  v-for="(dimension, index) in radarData.dimensions"
-                  :key="dimension.key"
-                  class="radar-group"
-                  :class="{ 'is-active': hoveredIndex === index }"
-                  @mouseenter="hoveredIndex = index"
-                  @mouseleave="hoveredIndex = null"
-                >
-                  <circle
-                    :cx="radarData.points[index].x"
-                    :cy="radarData.points[index].y"
-                    r="16"
-                    class="radar-hit"
-                  />
-                  <circle
-                    :cx="radarData.points[index].x"
-                    :cy="radarData.points[index].y"
-                    :r="hoveredIndex === index ? 5.5 : 4"
-                    class="radar-dot"
-                  >
-                    <title>{{ dimension.label }}：{{ dimension.value }} / 10（{{ dimension.rule }}）</title>
-                  </circle>
-                  <text
-                    :x="radarData.labels[index].x"
-                    :y="radarData.labels[index].y"
-                    :text-anchor="radarData.labels[index].anchor"
-                    class="radar-axis-label"
-                  >
-                    {{ dimension.label }}<tspan class="radar-axis-value">{{ dimension.value.toFixed(1) }}</tspan>
-                  </text>
-                </g>
-              </svg>
-
-              <div class="radar-side">
-                <ul class="radar-values" aria-label="雷达图数值（等价文本）">
-                  <li
-                    v-for="(dimension, index) in radarData.dimensions"
-                    :key="`value-${dimension.key}`"
-                    :class="{ 'is-active': hoveredIndex === index }"
-                    @mouseenter="hoveredIndex = index"
-                    @mouseleave="hoveredIndex = null"
-                  >
-                    <span class="radar-name">{{ dimension.label }}</span>
-                    <span class="radar-score">{{ dimension.value.toFixed(1) }} / 10</span>
-                    <span class="radar-rule">{{ dimension.rule }}</span>
-                  </li>
-                </ul>
-                <p class="muted radar-summary">
-                  本次共 {{ radarData.meta.total }} 个能力项（已覆盖 {{ radarData.meta.matched }} ·
-                  部分覆盖 {{ radarData.meta.partial }} · 缺失 {{ radarData.meta.missing }}），
-                  总体匹配度 {{ radarData.meta.score ?? '--' }} / 100。
-                </p>
-              </div>
+            <div class="panel-actions">
+              <button class="button" @click="router.push('/jd-report')">查看完整匹配报告</button>
             </div>
-            <div v-else class="placeholder-block">
-              本次匹配结果缺少能力项明细（items 为空），暂无法绘制雷达图；可参考下方匹配概览与差距清单文本。
-            </div>
+          </template>
+          <div v-else class="placeholder-block">
+            点击「开始匹配」后，会在新页面展示匹配度、能力雷达图、逐项对比与差距清单
           </div>
-
-          <div class="form-card">
-            <h3 class="section-title">匹配概览</h3>
-            <p class="muted">{{ result.summary }}</p>
-            <ul class="placeholder-list">
-              <li v-for="item in result.items" :key="item.capability">
-                <span class="idx">·</span>
-                <span>
-                  <strong>{{ item.capability }}</strong>
-                  <span class="badge" :data-status="item.status">{{ STATUS_LABELS[item.status] || item.status }}</span>
-                  <br />{{ item.evidence }} —— {{ item.comment }}
-                </span>
-              </li>
-            </ul>
-          </div>
-
-          <div class="form-card">
-            <h3 class="section-title">差距清单</h3>
-            <ul class="placeholder-list">
-              <li v-for="gap in result.gaps" :key="gap.capability">
-                <span class="idx">✗</span>
-                <span><strong>{{ gap.capability }}</strong>：{{ gap.gap }}<br />建议：{{ gap.suggestion }}</span>
-              </li>
-            </ul>
-          </div>
-        </template>
-        <div v-else class="form-card">
-          <div class="placeholder-block">点击「开始匹配」后，在此展示匹配度 + 能力项覆盖 + 差距清单</div>
         </div>
       </div>
     </div>
