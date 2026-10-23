@@ -1,11 +1,13 @@
 # ============================================================
-# 模块级模型路由配置（v2 · 2026-10-19）
+# 模块级模型路由配置（v3 · 2026-10-23）
 # 原则（决策④）：每个功能模块绑定一个独立模型——A/B/C/D 四个模块各用不同模型，
 #               模型 / 温度 / API Key / Base URL 均按模块独立配置；
 #               cross_review 与 evaluation 必须使用不同模型。
 # 说明：Key 只走环境变量（变量名见 .env.example），禁止硬编码；
 #       本项目为纯 Prompt 工程路线，本文件不含任何微调 / 训练字段；
 #       模型名称与温度为初版分配，A/B 实测后固化——改模型只改本文件。
+# v3（阶段 1）：新增 context_window_tokens（供 context_manager 计算 90% 摘要阈值；
+#       DeepSeek / GLM 官方窗口按档位取值，非精确 tokenizer 映射）。
 # ============================================================
 
 resume_diagnosis:          # 模块 A：简历诊断（中文生成 + 改写）
@@ -16,6 +18,7 @@ resume_diagnosis:          # 模块 A：简历诊断（中文生成 + 改写）
   timeout: 60
   max_retries: 2
   stream: false
+  context_window_tokens: 65536
 
 jd_matching:               # 模块 B：JD 匹配（两段式调用，低温保稳定）
   model: glm-4-air         # 智谱 GLM-4-Air：性价比高，适合结构化抽取 + 对齐评分
@@ -25,6 +28,7 @@ jd_matching:               # 模块 B：JD 匹配（两段式调用，低温保�
   timeout: 60
   max_retries: 2
   stream: false
+  context_window_tokens: 131072
 
 interview_agent:           # 模块 C：模拟面试（长对话 + 流式输出）
   model: glm-4-flash       # 智谱 GLM-4-Flash（免费档）：撑 30–80K token 长对话
@@ -34,6 +38,7 @@ interview_agent:           # 模块 C：模拟面试（长对话 + 流式输出�
   timeout: 120
   max_retries: 3
   stream: true
+  context_window_tokens: 131072
 
 evaluation:                # 模块 D：即时反馈（评分类，用更强档位 + 极低温）
   model: glm-4-plus        # 智谱 GLM-4-Plus：评分一致性优先
@@ -43,6 +48,7 @@ evaluation:                # 模块 D：即时反馈（评分类，用更强档�
   timeout: 60
   max_retries: 2
   stream: false
+  context_window_tokens: 131072
 
 cross_review:              # 模块 D：交叉复核（必须与 evaluation 使用不同模型）
   model: deepseek-chat     # DeepSeek-V3：跨供应商复核，降低同源偏差
@@ -52,3 +58,4 @@ cross_review:              # 模块 D：交叉复核（必须与 evaluation 使�
   timeout: 60
   max_retries: 2
   stream: false
+  context_window_tokens: 65536
