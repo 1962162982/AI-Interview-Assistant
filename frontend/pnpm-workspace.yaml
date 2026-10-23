@@ -1,0 +1,11 @@
+# pnpm（>=11）项目级配置。
+# 本项目不是 monorepo：此文件只用于固定依赖安装位置与解析布局，确保 pnpm 不向仓库外目录写入。
+# `.pnpm-store/` 与 `.npm-cache/` 已在仓库 .gitignore 中忽略，不随 git 提交。
+#
+# nodeLinker: hoisted（npm 风格扁平 node_modules）：
+# DSH Windows 沙箱中 pnpm 的 junction 目录无法被 Node ESM 的 realpath 解析，
+# 隔离布局（isolated）下 Vite 从软链路径加载自身依赖会报 ERR_MODULE_NOT_FOUND；
+# 扁平布局不依赖软链解析，install/build 可在沙箱与普通开发机上稳定复现。
+storeDir: .pnpm-store
+cacheDir: .npm-cache
+nodeLinker: hoisted
