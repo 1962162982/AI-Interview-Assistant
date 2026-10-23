@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { api, isMockMode } from '../api/client'
 import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
 import { formatTimestamp, getResume, saveResume } from '../stores/history'
+import { buildRadarData } from '../utils/radar'
 
 // 模块 B JD 匹配：真实调用 /api/jd/match（两段式由后端编排，契约 docs/api.md「四」）。
 // 简历优先取本地历史（简历诊断页保存）；没有则回退示例简历并提示。
@@ -23,6 +24,16 @@ const result = ref(null)
 let activeController = null
 
 const busy = computed(() => phase.value === 'matching')
+
+// 雷达图：数据推导规则集中写在 src/utils/radar.js（纯函数，可单测）；
+// 真实/mock 两种模式的 /api/jd/match 响应同构，因此都会出图。
+const hoveredIndex = ref(null)
+const radarData = computed(() => buildRadarData(result.value))
+const radarAriaLabel = computed(() => {
+  if (!radarData.value) return 'JD 匹配能力雷达图：暂无能力项数据'
+  const parts = radarData.value.dimensions.map((dimension) => `${dimension.label} ${dimension.value} 分`)
+  return `JD 匹配能力雷达图（满分 10 分）：${parts.join('；')}`
+})
 
 const pipeline = [
   { step: '①', title: 'JD 结构化抽取', detail: '低温（0.2）调用，输出岗位 / 职责 / 能力项（JDStructured）' },
@@ -62,6 +73,7 @@ async function match() {
       resume_text: resumeText.value.trim(),
       jd_text: jdText.value.trim(),
     }, { signal: localController.signal })
+    hoveredIndex.value = null
     saveResume({ text: resumeText.value, source: 'paste' })
     phase.value = 'done'
     notice.value = '匹配完成：匹配度与差距清单仅供参考，建议结合人工判断。'
@@ -152,6 +164,94 @@ async function match() {
             <div class="metric">
               <div class="label">差距</div>
               <div class="value">{{ result.gaps?.length ?? 0 }}<small>项</small></div>
+            </div>
+          </div>
+
+          <div class="form-card radar-card">
+            <h3 class="section-title">能力雷达图（SVG · 无第三方库）</h3>
+            <p class="muted">
+              由 items 的 matched / partial / missing 与总分推导 5 个维度（规则见下方文本列表）；
+              悬停顶点可看数值与推导规则，文本列表是无障碍等价信息（aria-label 同步提供整体描述）。
+            </p>
+            <div v-if="radarData" class="radar-layout">
+              <svg class="radar-svg" :viewBox="radarData.viewBox" role="img" :aria-label="radarAriaLabel">
+                <title>JD 匹配能力雷达图</title>
+                <!-- 网格环（20% / 40% / 60% / 80% / 100%） -->
+                <polygon
+                  v-for="ring in radarData.rings"
+                  :key="`ring-${ring.level}`"
+                  :points="ring.points"
+                  class="radar-grid"
+                />
+                <!-- 轴线 -->
+                <line
+                  v-for="(axis, index) in radarData.axes"
+                  :key="`axis-${index}`"
+                  :x1="radarData.center.x"
+                  :y1="radarData.center.y"
+                  :x2="axis.x"
+                  :y2="axis.y"
+                  class="radar-axis"
+                />
+                <!-- 数据多边形 -->
+                <polygon :points="radarData.polygon" class="radar-area" />
+                <!-- 数据点 + 轴标签（标签内含数值） -->
+                <g
+                  v-for="(dimension, index) in radarData.dimensions"
+                  :key="dimension.key"
+                  class="radar-group"
+                  :class="{ 'is-active': hoveredIndex === index }"
+                  @mouseenter="hoveredIndex = index"
+                  @mouseleave="hoveredIndex = null"
+                >
+                  <circle
+                    :cx="radarData.points[index].x"
+                    :cy="radarData.points[index].y"
+                    r="16"
+                    class="radar-hit"
+                  />
+                  <circle
+                    :cx="radarData.points[index].x"
+                    :cy="radarData.points[index].y"
+                    :r="hoveredIndex === index ? 5.5 : 4"
+                    class="radar-dot"
+                  >
+                    <title>{{ dimension.label }}：{{ dimension.value }} / 10（{{ dimension.rule }}）</title>
+                  </circle>
+                  <text
+                    :x="radarData.labels[index].x"
+                    :y="radarData.labels[index].y"
+                    :text-anchor="radarData.labels[index].anchor"
+                    class="radar-axis-label"
+                  >
+                    {{ dimension.label }}<tspan class="radar-axis-value">{{ dimension.value.toFixed(1) }}</tspan>
+                  </text>
+                </g>
+              </svg>
+
+              <div class="radar-side">
+                <ul class="radar-values" aria-label="雷达图数值（等价文本）">
+                  <li
+                    v-for="(dimension, index) in radarData.dimensions"
+                    :key="`value-${dimension.key}`"
+                    :class="{ 'is-active': hoveredIndex === index }"
+                    @mouseenter="hoveredIndex = index"
+                    @mouseleave="hoveredIndex = null"
+                  >
+                    <span class="radar-name">{{ dimension.label }}</span>
+                    <span class="radar-score">{{ dimension.value.toFixed(1) }} / 10</span>
+                    <span class="radar-rule">{{ dimension.rule }}</span>
+                  </li>
+                </ul>
+                <p class="muted radar-summary">
+                  样本：{{ radarData.meta.total }} 个能力项（matched {{ radarData.meta.matched }} /
+                  partial {{ radarData.meta.partial }} / missing {{ radarData.meta.missing }}），
+                  总分 {{ radarData.meta.score ?? '--' }} / 100。
+                </p>
+              </div>
+            </div>
+            <div v-else class="placeholder-block">
+              本次匹配结果缺少能力项明细（items 为空），暂无法绘制雷达图；可参考下方匹配概览与差距清单文本。
             </div>
           </div>
 

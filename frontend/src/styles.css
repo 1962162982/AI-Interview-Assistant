@@ -808,6 +808,134 @@ code {
   color: #1740b6;
 }
 
+/* ---------- JD 匹配雷达图（SVG 手绘，无第三方库） ---------- */
+.radar-card .muted {
+  max-width: 780px;
+}
+
+.radar-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 22px;
+  margin-top: 14px;
+}
+
+.radar-svg {
+  flex: 0 0 auto;
+  width: 340px;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.radar-grid {
+  fill: none;
+  stroke: #dbe4f0;
+  stroke-width: 1;
+}
+
+.radar-axis {
+  stroke: #c7d5ea;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.radar-area {
+  fill: rgba(29, 78, 216, 0.16);
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: fill 0.15s ease;
+}
+
+.radar-group {
+  cursor: pointer;
+}
+
+.radar-hit {
+  fill: transparent;
+}
+
+.radar-dot {
+  fill: var(--brand);
+  stroke: #fff;
+  stroke-width: 1.5;
+  transition: r 0.12s ease, fill 0.12s ease;
+}
+
+.radar-group.is-active .radar-dot {
+  fill: var(--brand-dark);
+}
+
+.radar-axis-label {
+  fill: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.radar-group.is-active .radar-axis-label {
+  fill: var(--brand-dark);
+}
+
+.radar-axis-value {
+  fill: var(--brand);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.radar-side {
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+
+.radar-values {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.radar-values li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fbfdff;
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.radar-values li.is-active {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.radar-name {
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+.radar-score {
+  color: var(--brand);
+  font-weight: 700;
+  text-align: right;
+}
+
+.radar-rule {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.radar-summary {
+  margin-top: 10px;
+}
+
 /* ---------- 响应式 ---------- */
 @media (max-width: 820px) {
   .app-header {
@@ -824,5 +952,14 @@ code {
 
   .split-grid {
     grid-template-columns: 1fr;
+  }
+
+  .radar-layout {
+    justify-content: center;
+  }
+
+  .radar-svg {
+    width: 100%;
+    max-width: 340px;
   }
 }

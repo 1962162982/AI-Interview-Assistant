@@ -2,11 +2,12 @@
 
 > 决策①：Web 应用（FastAPI 后端 + Vue 3 / Vite 前端）。页面路由：**首页 / 简历诊断 / JD 匹配 / 模拟面试 / 反馈报告**。
 >
-> 当前状态（阶段 3）：**已从 Mock 切换到真实后端联调**——5 个页面按 `docs/api.md` 契约调用真实 `/api` 接口，
-> 面试页使用 SSE 增量渲染，首页展示真实 `/api/meta/routes` 与 localStorage 历史；真实模式 `pnpm build` 通过，
+> 当前状态（阶段 3 + 阶段 5 加分项）：**已从 Mock 切换到真实后端联调**——5 个页面按 `docs/api.md` 契约调用真实 `/api` 接口，
+> 面试页使用 SSE 增量渲染，首页展示真实 `/api/meta/routes` 与 localStorage 历史；JD 匹配页新增 **SVG 手绘 5 维能力雷达图**（无第三方库，
+> 真实 / Mock 两种模式均出图，含 hover 数值、aria-label 与等价文本列表）；真实模式 `pnpm build` 通过，
 > 并完成 CORS 预检 + 简历上传解析 + 面试建会话 / 一轮 SSE / 结束的真实链路实测（记录见第 6、7 节）。
 >
-> Mock 数据层仍保留：`frontend/.env` 中 `VITE_USE_MOCK=true` 时可在无 Key / 无后端环境完整演示五页。
+> Mock 数据层仍保留：`frontend/.env` 中 `VITE_USE_MOCK=true` 时可在无 Key / 无后端环境完整演示五页（含雷达图）。
 
 ## 1. 页面路由
 
@@ -14,7 +15,7 @@
 | --- | --- | --- | --- | --- |
 | `/` | `src/views/HomeView.vue` | 首页 | 模块导航、真实模型路由表（决策④）、后端连通性自检、localStorage 历史（简历 / 会话 / 报告） | `GET /health`、`GET /api/meta/routes` |
 | `/resume` | `src/views/ResumeView.vue` | A 简历诊断 | PDF/DOCX 上传解析（含 degraded 提示）、粘贴文本降级、诊断报告渲染、可取消请求 | `POST /api/resume/parse`、`/structure`、`/diagnose` |
-| `/jd` | `src/views/JdMatchView.vue` | B JD 匹配 | 简历文本（优先取本地历史）、JD 输入、匹配度 / 能力项覆盖 / 差距清单、可取消请求 | `POST /api/jd/structure`、`/match` |
+| `/jd` | `src/views/JdMatchView.vue` | B JD 匹配 | 简历文本（优先取本地历史）、JD 输入、匹配度 / 能力项覆盖 / 差距清单、**SVG 5 维能力雷达图**、可取消请求 | `POST /api/jd/structure`、`/match` |
 | `/interview` | `src/views/InterviewView.vue` | C 模拟面试 | 三场景（实习 `intern` 默认 / 秋招 `autumn` / 保研 `grad`）、SSE 逐字渲染、防重复提交、停止生成、结束面试 | `POST /api/interview/sessions`、`.../turns`、`.../turns/stream`、`GET .../{sid}`、`POST .../{sid}/end` |
 | `/report` | `src/views/ReportView.vue` | D 即时反馈 | 生成新报告（需确认，2 次模型调用）/ 按 report_id 拉取、维度分 + 证据、交叉复核、Markdown 导出 | `POST /api/report/generate`、`GET /api/report/{rid}`、`GET .../markdown` |
 
@@ -39,6 +40,7 @@ frontend/
     ├── router/index.js         # 5 个页面路由
     ├── data/samples.js         # 虚构示例简历 / JD（联调兜底素材）
     ├── stores/history.js       # localStorage 历史：最近简历 / session_id / report_id
+    ├── utils/radar.js          # ★ JD 匹配雷达图数据推导（纯函数，可 Node 单测）
     ├── api/
     │   ├── client.js           # ★ 唯一 API 出口：统一响应壳 / 错误码 / SSE / 超时 / 取消
     │   └── mock.js             # Mock 数据层（VITE_USE_MOCK=true 时启用，虚构数据）
@@ -106,6 +108,20 @@ pnpm dev   # 若在 DSH 沙箱内：先设 NODE_OPTIONS="--require <frontend>\sc
 - 历史记录：`src/stores/history.js` 使用 `localStorage`（键 `aia.history.v1`）保存最近简历文本、`session_id`、`report_id`；首页可查看 / 清空，报告页可按 ID 拉取。
 - 真实模式下，简历诊断 / JD 匹配 / 面试首问 / 每轮追问 / 报告生成都会调用真实模型；报告生成 = 评分 + 交叉复核 2 次调用，页面默认不自动触发，需手动确认。
 
+### 5.1 JD 匹配雷达图（阶段 5 加分项 · T13）
+
+- **实现**：`src/utils/radar.js`（纯函数推导 + SVG 几何） + `JdMatchView.vue`（内联 SVG `viewBox="0 0 360 320"`）；**无第三方图表库、无新增依赖**。
+- **5 个维度与规则**（全部由 `/api/jd/match` 的 `items` 状态与 `score` 推导，规则同时展示在页面文本列表中）：
+  1. 技能匹配 = 加权覆盖率 ×10（matched=1 / partial=0.5 / missing=0）；
+  2. 项目经验 = matched 能力项占比 ×10；
+  3. 量化表达 = `evidence` 含数字的能力项占比 ×10；
+  4. 岗位相关 = 总分 `score / 100 × 10`；
+  5. 成长潜力 = `(1 − missing 占比) ×10`（缺口越少、补齐上限越高）。
+  所有维度四舍五入保留 1 位小数并 clamp 到 [0, 10]。
+- **交互与无障碍**：网格环 20%–100%、轴线、数据多边形；每个顶点可 hover（放大 + 高亮对应文本行 + 原生 `<title>` tooltip）；轴标签直接带数值；
+  `<svg role="img" :aria-label="…">` 提供整体描述，右侧 `<ul>` 文本列表是图表等价信息；`items` 为空时显示「无法绘制」占位而非空图。
+- **真实 / Mock 均出图**：两种模式复用同一视图与推导函数（响应结构同构）；已分别构建验证（见 6.1）。
+
 ## 6. 构建验证记录（DSH 沙箱）
 
 > 环境：系统 PATH 无 Node.js；使用 DSH 内置 **Node v24.21.0 + pnpm v11.28.5**
@@ -119,9 +135,15 @@ $env:NODE_OPTIONS="--require <frontend>\scripts\sandbox-vite-preload.cjs"
 <node.exe> <pnpm.mjs> run build
 ```
 
-→ **exit 0**：`vite v8.3.5 building client environment`、`✓ 37 modules transformed`、`✓ built in 1.09s`；
-产物 `dist/`：`index.html` + `assets/index-*.js`（101.76 kB / gzip 39.69 kB）+ `assets/index-*.css`（10.17 kB）+ 5 个路由 chunk + `history` 公共 chunk。
+→ **exit 0**：`vite v8.3.5 building client environment`、`✓ 38 modules transformed`、`✓ built in ~250–270ms`（实测多次 244–269ms）；
+产物 `dist/`（9 文件）：`index.html`（0.6 kB）+ `assets/index-*.js`（99.4 kB）+ `assets/index-*.css`（11.4 kB）+ 5 个路由 chunk（JdMatchView 11.4 kB，含雷达图）+ `history` 公共 chunk（1.7 kB）。
 **真实模式确认**：构建产物中 `isMockMode` 被常量折叠为 `false`（`Nc=!1`）；Mock 数据层同构代码被 tree-shaking 移除（产物中无 `sess_mock` / mock 题库文案）；`VITE_USE_MOCK` 仅剩页面标题文案中的字面量。
+
+**Mock 模式构建对照**（`VITE_USE_MOCK=true` 环境变量覆盖）：同样 **exit 0**（38 modules，244ms）；产物含 mock 数据层（`sess_mock` 可见）与雷达图代码 —— 证明「真实 / mock 两模式均出图」。
+
+**雷达图推导单测**：`node .tmp/radar-unit-check.mjs`（临时脚本，位于 gitignored `.tmp/`，验证后已删除）→ 23 项断言全 PASS：
+mock 数据（score 78 + 4 能力项）得到 技能匹配 5.0 / 项目经验 2.5 / 量化表达 5.0 / 岗位相关 7.8 / 成长潜力 7.5；
+真实同构数据（score 62 + 5 能力项）得到技能匹配 6.0 / 岗位相关 6.2；`items` 为空 / null → 返回 null（视图显示占位）；全 matched / 全 missing 边界正确。
 
 ### 6.2 历史记录（阶段 1，Mock 模式构建）
 

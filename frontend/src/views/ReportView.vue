@@ -23,7 +23,7 @@ const busy = computed(() => phase.value === 'loading')
 const canGenerate = computed(() => !busy.value && sessionInput.value.trim().length > 0)
 const canFetch = computed(() => !busy.value && reportInput.value.trim().length > 0)
 const loadingHint = computed(() => {
-  if (loadingKind.value === 'generate') return '正在生成报告：评分 + 交叉复核（2 次模型调用），约 30–90 秒…'
+  if (loadingKind.value === 'generate') return '正在生成报告：逐题评分 + 1 次交叉复核（≥2 次模型调用），约 30–90 秒…'
   if (loadingKind.value === 'fetch') return '正在拉取报告…'
   return '加载中…'
 })
@@ -153,7 +153,7 @@ onMounted(() => {
         <div class="field">
           <label for="session-id">面试会话 ID（session_id）</label>
           <input id="session-id" v-model="sessionInput" class="input" type="text" placeholder="例如 sess_20261023_ab12cd" :disabled="busy" />
-          <span class="hint">会调用评分 + 交叉复核模型（约 2 次调用），请确认成本后再点击。</span>
+          <span class="hint">会调用逐题评分 + 交叉复核模型（≥2 次调用），请确认成本后再点击。</span>
         </div>
         <div class="panel-actions">
           <button class="button" :disabled="!canGenerate" @click="generateReport">
