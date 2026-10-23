@@ -83,8 +83,14 @@ def load_doc_endpoints(text: str | None = None) -> set[Endpoint]:
 # 2) FastAPI 实际路由解析
 # ---------------------------------------------------------------------------
 def _iter_direct_routes(routes: Iterable[object]) -> Iterator[Endpoint]:
-    """从 app.routes 直接读取已展开的路由（旧版 FastAPI / 顶层路由）。"""
+    """从 app.routes 直接读取已展开的路由（旧版 FastAPI / 顶层路由）。
+
+    `include_in_schema=False` 的路由不算 HTTP 契约（如阶段 3 前端静态托管的
+    `/assets/*` 与 SPA 回退 catch-all），需排除，否则会污染契约集合。
+    """
     for route in routes:
+        if getattr(route, "include_in_schema", True) is False:
+            continue
         path = getattr(route, "path", None)
         methods = getattr(route, "methods", None)
         if not path or not methods or path in INTERNAL_PATHS:

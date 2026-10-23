@@ -380,7 +380,41 @@ doc.text; doc.segments; doc.degraded; doc.warnings; doc.char_count; doc.to_dict(
 - 面试流式：用 `fetch` + `ReadableStream` 读取 SSE 行；按 `event` 字段分发 `delta` / `done` / `error`；`retryable=false` 时不自动重试。
 - 报告页：`evaluation.dimensions[].evidence` 用于原文证据高亮；`markdown` 可直接预览 / 下载。
 
-## 八、变更记录
+## 八、前端静态托管（阶段 3，可选）
+
+> 用途：答辩 / 演示时由 FastAPI **单进程**同时提供 API 与前端构建产物，无需另起静态服务器。
+> **本节不改变接口契约**：契约端点共 15 个（`/health` 1 个 + `/api` 14 个）保持冻结；静态托管路由
+> `include_in_schema=False`，不进入 OpenAPI，也不会劫持 `/api`。
+
+启用条件：
+
+- `frontend/dist/index.html` 存在时自动启用（按请求检测，构建产物出现后无需重启后端）；
+- `frontend/dist` 不存在时行为与阶段 1 一致：未知路径 404，不影响开发与测试。
+
+路径映射（仅 GET）：
+
+| 请求路径 | 行为 |
+| --- | --- |
+| `/assets/*` | 返回 `frontend/dist/assets/*`；文件不存在或路径越界 → 404 |
+| 其他非保留路径（`/`、`/interview`、`/report/<rid>` 等） | SPA 回退：存在同名文件则返回该文件，否则返回 `frontend/dist/index.html`（`text/html`） |
+| `/api/*`、`/health`、`/docs`、`/redoc`、`/openapi.json` | 不接管，保持原有 API / 文档行为 |
+
+演示方式：
+
+```bash
+# 1) 构建前端（需 Node/pnpm 环境）
+cd frontend && pnpm build
+# 2) 单进程启动：http://127.0.0.1:8000/ 即前端页面，/api 为后端接口
+uvicorn backend.main:app --host 127.0.0.1 --port 8000
+```
+
+注意事项：
+
+- 前端真实模式需 `VITE_USE_MOCK=false`，且 `VITE_API_BASE_URL` 指向同一后端（默认 8000）；
+- CORS 仍按「一、通用约定」放行 5173 / 3000，可用环境变量 `CORS_ORIGINS` 覆盖；
+- 测试使用临时伪造 dist（`tests/test_static_frontend.py`），不依赖真实构建产物。
+
+## 九、变更记录
 
 | 版本 | 日期 | 变更 |
 | --- | --- | --- |

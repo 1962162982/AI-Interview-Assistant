@@ -1,11 +1,13 @@
-"""AI 模拟面试与简历诊断助手 · 后端入口（v2 · 阶段 1）
+"""AI 模拟面试与简历诊断助手 · 后端入口（v3 · 阶段 3）
 
 职责：
 - 保留骨架期 `GET /health`（契约不变）；
-- 挂载 `/api` 下的四组业务路由（薄壳占位）+ 元信息路由，契约见 docs/api.md；
-- CORS（供 Vue 3 开发服务器联调，默认 5173 / 3000）；
+- 挂载 `/api` 下的四组业务路由 + 元信息路由，契约见 docs/api.md（15 条接口不变）；
+- CORS（供 Vue 3 开发服务器联调，默认 5173 / 3000，可用 CORS_ORIGINS 覆盖）；
 - 统一响应壳与错误处理：HTTPException / 参数校验错误 / 未捕获异常统一为
-  `{"code", "message", "data"}`（错误码见 docs/api.md）。
+  `{"code", "message", "data"}`（错误码见 docs/api.md）；
+- **前端静态托管（阶段 3 可选）**：`frontend/dist` 存在时，由同一 FastAPI 进程托管
+  `/assets/*` 静态资源与 SPA 回退；dist 不存在时行为不变（404，不影响开发与测试）。
 
 启动：`uvicorn backend.main:app --reload`（或 `python -m backend.main`）。
 """
@@ -13,11 +15,12 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api import api_router
@@ -45,6 +48,52 @@ def _cors_origins() -> list[str]:
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
+# ------------------------------------------------------------------ #
+# 前端静态托管（阶段 3 可选）：frontend/dist 存在时由后端单进程托管
+# ------------------------------------------------------------------ #
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIST_DIR = REPO_ROOT / "frontend" / "dist"
+
+# 静态托管**不接管**的路径前缀（业务 API / 健康检查 / 文档 / 静态资源自身）
+STATIC_RESERVED_PREFIXES: tuple[str, ...] = ("/api", "/health", "/assets", "/docs", "/redoc")
+STATIC_RESERVED_EXACT: frozenset[str] = frozenset({"/openapi.json"})
+
+
+def get_frontend_dist_dir() -> Path | None:
+    """返回可托管的前端构建目录；不存在返回 None。
+
+    延迟到请求时判断（便于测试 monkeypatch，也允许构建产物出现后无需重启）。
+    """
+    dist = FRONTEND_DIST_DIR
+    return dist if dist.is_dir() else None
+
+
+def _is_reserved_static_path(path: str) -> bool:
+    """判断路径是否属于 API / 健康检查 / 文档等**不得**做 SPA 回退的保留路径。"""
+    if path in STATIC_RESERVED_EXACT:
+        return True
+    return any(path == prefix or path.startswith(prefix + "/") for prefix in STATIC_RESERVED_PREFIXES)
+
+
+def _resolve_dist_file(dist: Path, relative: str) -> Path | None:
+    """安全解析 dist 内文件（拒绝 `..` 越界）；不存在/越界返回 None。"""
+    relative = relative.lstrip("/")
+    if not relative:
+        return None
+    try:
+        dist_root = dist.resolve()
+        candidate = (dist / relative).resolve()
+    except OSError:
+        return None
+    if candidate != dist_root and dist_root not in candidate.parents:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _static_not_found() -> StarletteHTTPException:
+    return StarletteHTTPException(status_code=404, detail="Not Found")
+
+
 app = FastAPI(
     title="AI Interview Assistant",
     version="0.2.0",
@@ -69,6 +118,34 @@ app.include_router(api_router)
 def health() -> dict[str, str]:
     """健康检查（骨架期探活用，契约不变）。"""
     return {"status": "ok"}
+
+
+# ------------------------------------------------------------------ #
+# 前端静态托管（阶段 3 可选）：仅当 frontend/dist 存在时生效
+# ------------------------------------------------------------------ #
+@app.get("/assets/{asset_path:path}", include_in_schema=False)
+def serve_frontend_asset(asset_path: str):
+    """`/assets/*` → `frontend/dist/assets/*`；dist 或文件缺失 → 404。"""
+    dist = get_frontend_dist_dir()
+    target = _resolve_dist_file(dist, f"assets/{asset_path}") if dist is not None else None
+    if target is None:
+        raise _static_not_found()
+    return FileResponse(target)
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+def serve_spa(full_path: str):
+    """SPA 回退：非保留路径的 GET → `frontend/dist/index.html`；dist 缺失 → 404。"""
+    request_path = "/" + full_path
+    if _is_reserved_static_path(request_path):
+        raise _static_not_found()
+    dist = get_frontend_dist_dir()
+    if dist is None or not (dist / "index.html").is_file():
+        raise _static_not_found()
+    target = _resolve_dist_file(dist, full_path)
+    if target is not None:
+        return FileResponse(target)
+    return FileResponse(dist / "index.html", media_type="text/html")
 
 
 # ------------------------------------------------------------------ #
