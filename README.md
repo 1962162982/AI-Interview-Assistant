@@ -102,6 +102,16 @@ Copy-Item .env.example .env      # Windows PowerShell；Linux/macOS 用 cp
 
 无 Key 也能启动与演示：`/api/meta/routes`、`/api/interview/*`（题库降级）可用；依赖模型的接口会按契约返回 `2001/2002` 错误码。
 
+有**有效 DeepSeek Key** 时，先跑真实联调冒烟（覆盖模块 A 诊断/结构化 + cross_review，两个 DeepSeek 路由）：
+
+```bash
+.\.venv\Scripts\python.exe scripts/smoke_deepseek.py
+# 退出码：0=全部通过；2=Key 缺失/鉴权失败；1=其他失败（网络/JSON 校验等）
+```
+
+> 注：`evaluation/run_eval.py --real` 还需要 GLM 评分 Key（`EVALUATION_API_KEY`，路由 evaluation = glm-4-plus），
+> 与冒烟脚本（只需 DeepSeek Key）不同。
+
 前端（需 Node.js 18+；或使用演示机预构建）：
 
 ```bash
