@@ -23,6 +23,8 @@ from pydantic import BaseModel
 
 from backend.services import model_router
 from backend.services.model_router import (
+    DEFAULT_CONFIG_PATH,
+    REPO_ROOT,
     REQUIRED_ROUTES,
     ChatResult,
     MissingAPIKeyError,
@@ -34,9 +36,13 @@ from backend.services.model_router import (
     UnknownRouteError,
     load_env_file,
     load_route_configs,
+    resolve_config_path,
 )
 
 CONFIG_PATH = Path(__file__).resolve().parents[1] / "backend" / "config" / "models.yaml"
+#: 临时“全 DeepSeek”联调配置（通过 MODELS_CONFIG_PATH 启用）
+DEEPSEEK_CONFIG_REL = "backend/config/models.deepseek.yaml"
+DEEPSEEK_CONFIG_PATH = CONFIG_PATH.parent / "models.deepseek.yaml"
 
 
 # ------------------------------------------------------------------ #
@@ -376,3 +382,68 @@ def test_load_env_file_does_not_override_existing(monkeypatch, tmp_dir):
 
 def test_load_env_file_missing_returns_false(tmp_dir):
     assert load_env_file(tmp_dir / "no-such.env") is False
+
+
+# ------------------------------------------------------------------ #
+# 配置路径解析（MODELS_CONFIG_PATH：临时切换供应商 / 模型配置）
+# ------------------------------------------------------------------ #
+def test_resolve_config_path_default_when_no_param_and_no_env(monkeypatch):
+    """无显式参数、无环境变量 → 默认 backend/config/models.yaml。"""
+    monkeypatch.delenv("MODELS_CONFIG_PATH", raising=False)
+    assert resolve_config_path() == DEFAULT_CONFIG_PATH
+    assert resolve_config_path(None) == DEFAULT_CONFIG_PATH
+
+
+def test_resolve_config_path_relative_env_is_resolved_from_repo_root(monkeypatch):
+    """环境变量为相对路径 → 按仓库根目录解析。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", DEEPSEEK_CONFIG_REL)
+    resolved = resolve_config_path()
+    assert resolved == REPO_ROOT / DEEPSEEK_CONFIG_REL
+    assert resolved == DEEPSEEK_CONFIG_PATH
+    assert resolved.is_absolute()
+    assert resolved.is_file(), f"临时配置不存在：{resolved}"
+
+
+def test_resolve_config_path_explicit_param_overrides_env(monkeypatch):
+    """显式参数优先于 MODELS_CONFIG_PATH（绝对 / 相对路径都支持）。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", DEEPSEEK_CONFIG_REL)
+    assert resolve_config_path(CONFIG_PATH) == CONFIG_PATH
+    assert resolve_config_path("backend/config/models.yaml") == CONFIG_PATH
+
+
+def test_resolve_config_path_absolute_env_used_as_is(monkeypatch):
+    """环境变量为绝对路径 → 原样使用。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", str(DEEPSEEK_CONFIG_PATH))
+    assert resolve_config_path() == DEEPSEEK_CONFIG_PATH
+
+
+def test_resolve_config_path_blank_env_falls_back_to_default(monkeypatch):
+    """环境变量为空串 / 空白 → 回退默认配置。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", "   ")
+    assert resolve_config_path() == DEFAULT_CONFIG_PATH
+
+
+def test_model_router_loads_temporary_deepseek_config_from_env(monkeypatch):
+    """env + load_env=False → ModelRouter 加载临时“全 DeepSeek”配置的 5 条路由。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", DEEPSEEK_CONFIG_REL)
+    router = ModelRouter(load_env=False)
+    models = {route: config.model for route, config in router.routes.items()}
+    assert set(models) == set(REQUIRED_ROUTES)
+    assert models["resume_diagnosis"] == "deepseek-v4-pro"
+    assert models["jd_matching"] == "deepseek-flash"
+    assert models["interview_agent"] == "deepseek-flash"
+    assert models["evaluation"] == "deepseek-v4-pro"
+    assert models["cross_review"] == "deepseek-flash"
+    # 决策④原则（评分与复核异模型）在临时配置中仍成立
+    assert models["evaluation"] != models["cross_review"]
+    # 上下文窗口取自临时配置（1M）
+    assert router.get_route_config("interview_agent").context_window_tokens == 1048576
+
+
+def test_model_router_explicit_config_ignores_env(monkeypatch):
+    """显式 config_path 优先于 MODELS_CONFIG_PATH：显式传默认配置时不受 env 影响。"""
+    monkeypatch.setenv("MODELS_CONFIG_PATH", DEEPSEEK_CONFIG_REL)
+    router = ModelRouter(CONFIG_PATH, load_env=False)
+    assert router.get_route_config("resume_diagnosis").model == "deepseek-chat"
+    assert router.get_route_config("jd_matching").model == "glm-4-air"
+

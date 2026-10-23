@@ -95,7 +95,7 @@ def _fake_first_evaluation() -> InterviewEvaluation:
 
 
 def run_module_a(results: list[bool]) -> None:
-    print("[RUN ] 模块 A · 真实简历诊断（deepseek-chat）……")
+    print("[RUN ] 模块 A · 真实简历诊断（DeepSeek 路由 resume_diagnosis）……")
     if not SAMPLE_RESUME.is_file():
         raise FileNotFoundError(f"样例简历不存在：{SAMPLE_RESUME}")
     resume_text = SAMPLE_RESUME.read_text(encoding="utf-8")
@@ -129,7 +129,7 @@ def run_module_a(results: list[bool]) -> None:
 
 
 def run_cross_review(results: list[bool]) -> None:
-    print("[RUN ] cross_review · 真实交叉复核（deepseek-chat，与评分模型不同）……")
+    print("[RUN ] cross_review · 真实交叉复核（cross_review 路由，与评分不同模型）……")
     started = time.time()
     review = cross_review_answer(
         SAMPLE_CONVERSATION,

@@ -1,0 +1,68 @@
+# ============================================================
+# 临时联调路由配置（2026-10-23，用户指示：“暂时都使用 DeepSeek，等模型跑通后再混用两个模型”）
+# ------------------------------------------------------------
+# 启用方式：在本地 .env 中设置
+#   MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml
+# 删除 / 注释该变量即自动恢复 backend/config/models.yaml（决策④ 双供应商混用）。
+#
+# 说明：
+#   1) 该端点（https://api.deepseek.com）当前支持两个模型：
+#      - deepseek-v4-pro ：质量档（A 简历诊断 / D 评分）
+#      - deepseek-flash  ：速度档（B JD 匹配 / C 模拟面试 / D 交叉复核）
+#      评分（evaluation）与复核（cross_review）仍使用**不同模型**（pro vs flash），
+#      保留决策④“评分与复核异模型”的原则；但当前为同一供应商，属于临时模式。
+#   2) 本文件仅用于联调，不改动决策④的 models.yaml；模型跑通、GLM Key 到位后
+#      需切回 models.yaml 并重跑评测回归（铁律）再固化。
+#   3) Key / Base URL 只走环境变量（变量名与 models.yaml 相同），禁止硬编码。
+#   4) context_window_tokens 取自该端点 /models 返回值（1M）。
+# ============================================================
+
+resume_diagnosis:          # 模块 A：简历诊断（质量档）
+  model: deepseek-v4-pro
+  temperature: 0.3
+  api_key_env: RESUME_DIAGNOSIS_API_KEY
+  base_url_env: RESUME_DIAGNOSIS_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+jd_matching:               # 模块 B：JD 匹配（速度档）
+  model: deepseek-flash
+  temperature: 0.2
+  api_key_env: JD_MATCHING_API_KEY
+  base_url_env: JD_MATCHING_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+interview_agent:           # 模块 C：模拟面试（速度档 + 流式）
+  model: deepseek-flash
+  temperature: 0.8
+  api_key_env: INTERVIEW_AGENT_API_KEY
+  base_url_env: INTERVIEW_AGENT_BASE_URL
+  timeout: 180
+  max_retries: 3
+  stream: true
+  context_window_tokens: 1048576
+
+evaluation:                # 模块 D：即时反馈评分（质量档 + 极低温）
+  model: deepseek-v4-pro
+  temperature: 0.1
+  api_key_env: EVALUATION_API_KEY
+  base_url_env: EVALUATION_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+cross_review:              # 模块 D：交叉复核（与 evaluation 不同模型：flash vs pro）
+  model: deepseek-flash
+  temperature: 0.1
+  api_key_env: CROSS_REVIEW_API_KEY
+  base_url_env: CROSS_REVIEW_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576

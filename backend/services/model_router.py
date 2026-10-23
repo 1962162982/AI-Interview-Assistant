@@ -436,6 +436,22 @@ def _repair_prompt(schema: type, error: str) -> str:
     )
 
 
+def resolve_config_path(config_path: str | Path | None = None) -> Path:
+    """解析路由配置路径：显式参数 > 环境变量 MODELS_CONFIG_PATH > 默认 models.yaml。
+
+    ``MODELS_CONFIG_PATH`` 用于**临时切换供应商 / 模型配置**（例如“全部先走 DeepSeek”
+    的联调模式），不修改决策④的默认 ``models.yaml``；相对路径按仓库根目录解析。
+    """
+    if config_path is not None:
+        path = Path(config_path)
+    else:
+        raw = os.environ.get("MODELS_CONFIG_PATH", "").strip()
+        path = Path(raw) if raw else DEFAULT_CONFIG_PATH
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    return path
+
+
 # ---------------------------------------------------------------- #
 # 模型路由器
 # ---------------------------------------------------------------- #
@@ -452,10 +468,10 @@ class ModelRouter:
         sleep_fn: Callable[[float], None] | None = None,
         backoff_base: float = 0.5,
     ) -> None:
-        self._config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
         self._env_path = Path(env_path) if env_path else DEFAULT_ENV_PATH
         if load_env:
             load_env_file(self._env_path)
+        self._config_path = resolve_config_path(config_path)
         self._routes = load_route_configs(self._config_path)
         self._client_factory: ClientFactory = client_factory or _default_client_factory
         self._sleep = sleep_fn or time.sleep
