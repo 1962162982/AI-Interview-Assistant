@@ -4,8 +4,8 @@
 
 .DESCRIPTION
     1. 检查项目 .venv 与后端核心依赖；
-    2. frontend/dist 缺失时，使用 DSH 自带 Node/pnpm 构建前端
-       （node_modules / store / cache 均固定在项目内）；
+    2. frontend/dist 缺失时，优先使用 DSH 自带 Node/pnpm 构建前端
+       （node_modules / store / cache 均固定在项目内；普通新电脑可手动构建后用 -SkipBuild）；
     3. 启动 uvicorn，由 FastAPI 单进程同时托管 /api 与前端构建产物（SPA 回退）。
 
 .PARAMETER Port
@@ -83,12 +83,12 @@ elseif (Test-Path -LiteralPath $DistIndex) {
     Write-Host "    已检测到 frontend/dist/index.html，跳过构建（如需重建请先删除 frontend/dist 后重跑）"
 }
 else {
-    Write-Host '    未检测到 frontend/dist/index.html，开始构建前端（DSH 自带 Node/pnpm）...'
+    Write-Host '    未检测到 frontend/dist/index.html，开始构建前端（优先使用 DSH 内置 Node/pnpm）...'
     if (-not (Test-Path -LiteralPath $DshNode)) {
-        Stop-WithError "未找到 Node：$DshNode。可手动在 frontend/ 执行 pnpm build，或使用 -SkipBuild 跳过构建。"
+        Stop-WithError "未找到可用 Node（本脚本优先使用 DSH 内置 Node）。新电脑请安装 Node.js 20.19+ 后在 frontend/ 手动执行 pnpm install 与 pnpm build（或用 npm install --no-package-lock + npm run build），再运行本脚本并加 -SkipBuild。详见项目根目录《指南.md》。"
     }
     if (-not (Test-Path -LiteralPath $DshPnpm)) {
-        Stop-WithError "未找到 pnpm：$DshPnpm。可手动在 frontend/ 执行 pnpm build，或使用 -SkipBuild 跳过构建。"
+        Stop-WithError "未找到 pnpm（本脚本优先使用 DSH 内置 pnpm）。请在 frontend/ 手动执行 pnpm install 与 pnpm build，再运行本脚本并加 -SkipBuild。详见项目根目录《指南.md》。"
     }
     $env:npm_config_cache = Join-Path $FrontendDir '.npm-cache'
     Write-Host "    node : $DshNode"
