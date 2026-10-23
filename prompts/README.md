@@ -39,6 +39,7 @@
 | interviewer/scene_autumn.md | C 模拟面试 | glm-4-flash | 秋招场景变体 |
 | interviewer/scene_grad.md | C 模拟面试 | glm-4-flash | 保研场景变体 |
 | resume_diagnosis.md | A 简历诊断 | deepseek-chat | 检查清单式 + few-shot 改写 |
+| resume_structured.md | A 简历诊断（辅助） | deepseek-chat | 简历纯文本 → ResumeStructured JSON 抽取（v1，禁止编造） |
 | jd_structured.md | B JD 匹配 | glm-4-air | 两段式第一步：JD 抽取（低温 0.2） |
 | jd_matching.md | B JD 匹配 | glm-4-air | 两段式第二步：对齐评分 |
 | scoring.md | D 即时反馈 | glm-4-plus | 显式 rubric + 锚定示例 + 强制 grounding |
