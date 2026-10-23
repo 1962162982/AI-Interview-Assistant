@@ -1,15 +1,26 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { api, isMockMode } from '../api/client'
-import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../api/mock'
+import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
+import { formatTimestamp, getResume, saveResume } from '../stores/history'
 
-// 模块 B JD 匹配：按 docs/api.md 契约调用 /api/jd/match（两段式由后端编排）。
+// 模块 B JD 匹配：真实调用 /api/jd/match（两段式由后端编排，契约 docs/api.md「四」）。
+// 简历优先取本地历史（简历诊断页保存）；没有则回退示例简历并提示。
 const STATUS_LABELS = { matched: '已覆盖', partial: '部分覆盖', missing: '缺失' }
 
+const storedResume = getResume()
+const resumeText = ref(storedResume?.text || SAMPLE_RESUME_TEXT)
+const resumeSource = computed(() =>
+  storedResume
+    ? `本地历史简历（${formatTimestamp(storedResume.savedAt)}）`
+    : '示例简历（尚未在「简历诊断」页解析 / 粘贴）',
+)
 const jdText = ref('')
 const phase = ref('idle') // idle | matching | done
 const errorMessage = ref('')
+const notice = ref('')
 const result = ref(null)
+let activeController = null
 
 const busy = computed(() => phase.value === 'matching')
 
@@ -18,26 +29,48 @@ const pipeline = [
   { step: '②', title: '逐项对齐评分', detail: '简历能力项 × JD 能力项 → 匹配度（0–100）+ 差距清单' },
 ]
 
-function fillSample() {
+function fillSampleJd() {
   jdText.value = SAMPLE_JD_TEXT
 }
 
+function useSampleResume() {
+  resumeText.value = SAMPLE_RESUME_TEXT
+  notice.value = '已切换为虚构示例简历。'
+}
+
+function cancelCurrent() {
+  activeController?.abort()
+}
+
 async function match() {
+  if (busy.value) return
+  if (!resumeText.value.trim()) {
+    errorMessage.value = '缺少简历文本：请先在「简历诊断」页解析 / 粘贴简历，或使用示例简历'
+    return
+  }
   if (!jdText.value.trim()) {
     errorMessage.value = '请先输入目标岗位 JD 文本'
     return
   }
   phase.value = 'matching'
   errorMessage.value = ''
+  notice.value = ''
+  const localController = new AbortController()
+  activeController = localController
   try {
     result.value = await api.jdMatch({
-      resume_text: SAMPLE_RESUME_TEXT,
+      resume_text: resumeText.value.trim(),
       jd_text: jdText.value.trim(),
-    })
+    }, { signal: localController.signal })
+    saveResume({ text: resumeText.value, source: 'paste' })
     phase.value = 'done'
+    notice.value = '匹配完成：匹配度与差距清单仅供参考，建议结合人工判断。'
   } catch (error) {
-    errorMessage.value = error.message
+    if (error.cancelled) notice.value = '已取消匹配请求。'
+    else errorMessage.value = error.message
     phase.value = 'idle'
+  } finally {
+    activeController = null
   }
 }
 </script>
@@ -56,28 +89,42 @@ async function match() {
         <span class="chip">0–100 匹配度</span>
         <span class="chip">差距清单</span>
         <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
+        <span v-else class="chip chip-live">真实后端模式</span>
       </div>
     </header>
 
     <div class="split-grid">
       <div class="form-card">
         <div class="field">
+          <label for="resume-input">简历文本（{{ resumeSource }}）</label>
+          <textarea id="resume-input" v-model="resumeText" class="textarea" rows="5" placeholder="粘贴简历文本，或先在简历诊断页解析"></textarea>
+          <span class="hint">
+            可在简历诊断页保存后自动带入；
+            <a class="link-inline" href="#" @click.prevent="useSampleResume">使用示例简历</a>
+          </span>
+        </div>
+
+        <div class="field">
           <label for="jd-text">目标岗位 JD 文本</label>
           <textarea
             id="jd-text"
             v-model="jdText"
             class="textarea"
-            rows="12"
+            rows="9"
             placeholder="粘贴岗位 JD，或点击下方「填入示例 JD」"
           ></textarea>
-          <span class="hint">简历侧使用示例简历（{{ SAMPLE_RESUME_TEXT.length }} 字）参与匹配；真实联调时由简历诊断页传入。</span>
         </div>
+
+        <div v-if="notice" class="notice">{{ notice }}</div>
+        <div v-if="errorMessage" class="notice notice-error">{{ errorMessage }}</div>
+
         <div class="panel-actions">
           <button class="button" :disabled="busy" @click="match">
             {{ busy ? '匹配中…' : '开始匹配' }}
           </button>
-          <button class="button ghost" :disabled="busy" @click="fillSample">填入示例 JD</button>
-          <span v-if="errorMessage" class="status" data-state="error">{{ errorMessage }}</span>
+          <button v-if="busy" class="button ghost" @click="cancelCurrent">取消请求</button>
+          <button class="button ghost" :disabled="busy" @click="fillSampleJd">填入示例 JD</button>
+          <span v-if="busy" class="muted">匹配会调用后端模型，通常需要 10–90 秒。</span>
         </div>
       </div>
 

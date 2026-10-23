@@ -6,42 +6,14 @@
  * 所有内容均为虚构示例，不含真实用户信息与任何 API Key；接入真实后端后设 VITE_USE_MOCK=false 即可停用。
  */
 
+import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
+
+// 兼容旧引用：示例素材统一放在 src/data/samples.js
+export { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT }
+
 const LATENCY_MS = 220
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-/** 虚构示例简历（仅用于演示与素材占位，勿使用真人简历） */
-export const SAMPLE_RESUME_TEXT = `张同学
-求职意向：后端开发实习生
-
-教育经历
-2022.09–2026.06  某大学  计算机科学与技术  本科
-
-实习经历
-2025.07–2025.09  某科技公司  后端开发实习生
-- 参与了学院迎新系统的开发，负责后端接口。
-
-项目经历
-选课系统（课程项目）
-- 使用 FastAPI 完成 3 个接口，数据库使用 MySQL。
-- 优化了接口性能，QPS 提升 3 倍。
-
-专业技能
-- 熟悉 Python、FastAPI、MySQL；了解 Linux 基本命令。`
-
-/** 虚构示例 JD（后端开发实习生方向） */
-export const SAMPLE_JD_TEXT = `后端开发实习生（Python 方向）
-
-岗位职责：
-1. 负责业务系统后端接口的设计、开发与优化；
-2. 参与高并发场景下的性能优化与稳定性建设；
-3. 与产品、前端协作完成需求交付。
-
-任职要求：
-1. 熟悉 Python，了解 FastAPI / Flask 等 Web 框架；
-2. 熟悉 MySQL，了解索引与事务；
-3. 熟悉 Redis 缓存，了解常见缓存设计；
-4. 有良好的编码习惯与问题排查能力。`
 
 const SCENE_LABELS = { intern: '实习', autumn: '秋招', grad: '保研' }
 

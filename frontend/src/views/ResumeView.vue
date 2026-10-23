@@ -1,10 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { api, isMockMode } from '../api/client'
-import { SAMPLE_RESUME_TEXT } from '../api/mock'
+import { SAMPLE_RESUME_TEXT } from '../data/samples'
+import { getResume, saveResume } from '../stores/history'
 
-// 模块 A 简历诊断：按 docs/api.md 契约调用 /api/resume/parse + /api/resume/diagnose。
-// Mock 模式（默认）返回同构虚构数据；VITE_USE_MOCK=false 时走真实后端。
+// 模块 A 简历诊断：真实调用 /api/resume/parse + /api/resume/diagnose（契约 docs/api.md「三」）。
+// - 上传解析为本地解析，不消耗模型调用；诊断会调用模型（resume_diagnosis 路由）。
+// - 上传/诊断均支持取消（AbortController），请求超时由 client.js 统一处理。
 const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
 const checks = [
   { title: '量化表达', detail: '是否有可验证的数字、指标与结果' },
@@ -14,32 +16,48 @@ const checks = [
   { title: '错别字格式', detail: '标点、时间线、中英文混排等格式问题' },
 ]
 
-const resumeText = ref('')
+const previousResume = getResume()
+const resumeText = ref(previousResume?.text || '')
 const targetRole = ref('后端开发实习生')
-const uploadName = ref('')
+const uploadName = ref(previousResume?.filename || '')
 const phase = ref('idle') // idle | parsing | analyzing | done
 const errorMessage = ref('')
+const notice = ref('')
 const diagnosis = ref(null)
+let activeController = null
 
 const busy = computed(() => phase.value === 'parsing' || phase.value === 'analyzing')
+const charCount = computed(() => resumeText.value.trim().length)
+
+function cancelCurrent() {
+  activeController?.abort()
+}
 
 async function onFileChange(event) {
   const file = event.target.files?.[0]
   if (!file) return
   phase.value = 'parsing'
   errorMessage.value = ''
+  notice.value = ''
+  const localController = new AbortController()
+  activeController = localController
   try {
-    const data = await api.resumeParse(file)
+    const data = await api.resumeParse(file, { signal: localController.signal })
     resumeText.value = data?.text || ''
     uploadName.value = data?.filename || file.name
     if (data?.degraded) {
-      errorMessage.value = '解析质量有限（可能为扫描件），已降级为纯文本，请检查后手动修正。'
+      notice.value = '解析质量有限（可能为扫描件 / 乱码），已降级为纯文本；请检查后手动修正，或改用「粘贴文本」通道。'
+    } else {
+      notice.value = `解析成功：${data?.char_count ?? resumeText.value.length} 字${data?.segments?.length ? `，${data.segments.length} 个分段` : ''}。`
+      saveResume({ text: resumeText.value, filename: uploadName.value, source: 'upload' })
     }
     phase.value = 'idle'
   } catch (error) {
-    errorMessage.value = error.message
+    if (error.cancelled) notice.value = '已取消解析请求。'
+    else errorMessage.value = error.message
     phase.value = 'idle'
   } finally {
+    activeController = null
     event.target.value = ''
   }
 }
@@ -49,6 +67,7 @@ function fillSample() {
   uploadName.value = ''
   diagnosis.value = null
   errorMessage.value = ''
+  notice.value = '已填入虚构示例简历，可直接点击「开始诊断」。'
   phase.value = 'idle'
 }
 
@@ -57,17 +76,30 @@ async function diagnose() {
     errorMessage.value = '请先上传简历（PDF / DOCX）或粘贴简历文本'
     return
   }
+  if (busy.value) return
   phase.value = 'analyzing'
   errorMessage.value = ''
+  notice.value = ''
+  const localController = new AbortController()
+  activeController = localController
   try {
     diagnosis.value = await api.resumeDiagnose({
       resume_text: resumeText.value.trim(),
       target_role: targetRole.value.trim() || undefined,
+    }, { signal: localController.signal })
+    saveResume({
+      text: resumeText.value,
+      filename: uploadName.value,
+      source: uploadName.value ? 'upload' : 'paste',
     })
     phase.value = 'done'
+    notice.value = '诊断完成；结果已保存为本地历史，可在 JD 匹配 / 模拟面试中复用。'
   } catch (error) {
-    errorMessage.value = error.message
+    if (error.cancelled) notice.value = '已取消诊断请求。'
+    else errorMessage.value = error.message
     phase.value = 'idle'
+  } finally {
+    activeController = null
   }
 }
 </script>
@@ -86,6 +118,7 @@ async function diagnose() {
         <span class="chip">强制引用原文</span>
         <span class="chip">few-shot 改写</span>
         <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
+        <span v-else class="chip chip-live">真实后端模式</span>
       </div>
     </header>
 
@@ -94,11 +127,11 @@ async function diagnose() {
         <div class="field">
           <label for="resume-file">上传简历（PDF / DOCX）</label>
           <div class="upload-zone">
-            <strong>{{ uploadName || '文件上传占位' }}</strong>
-            <span>调用 <code>POST /api/resume/parse</code>；扫描件 / 乱码会返回降级标记，提示改用粘贴文本。</span>
+            <strong>{{ uploadName || '选择文件后自动解析' }}</strong>
+            <span>调用 <code>POST /api/resume/parse</code>（本地解析，不调用模型）；扫描件 / 乱码返回降级标记。</span>
             <div class="inline-actions">
               <label class="button file-button">
-                选择文件
+                {{ phase === 'parsing' ? '解析中…' : '选择文件' }}
                 <input id="resume-file" type="file" accept=".pdf,.docx" :disabled="busy" @change="onFileChange" />
               </label>
               <button class="button ghost" :disabled="busy" @click="fillSample">填入示例简历</button>
@@ -107,7 +140,7 @@ async function diagnose() {
         </div>
 
         <div class="field">
-          <label for="resume-text">或粘贴简历文本（解析失败降级通道）</label>
+          <label for="resume-text">简历文本（可粘贴或直接修改）</label>
           <textarea
             id="resume-text"
             v-model="resumeText"
@@ -115,18 +148,23 @@ async function diagnose() {
             rows="9"
             placeholder="粘贴纯文本简历，或点击上方「填入示例简历」"
           ></textarea>
+          <span class="hint">当前 {{ charCount }} 字；上传成功或诊断后会保存到本地历史（localStorage）。</span>
         </div>
 
         <div class="field">
-          <label for="target-role">目标岗位（可选）</label>
+          <label for="target-role">目标岗位（可选，用于「关键词对齐」检查）</label>
           <input id="target-role" v-model="targetRole" class="input" type="text" placeholder="例如：后端开发实习生" />
         </div>
 
+        <div v-if="notice" class="notice">{{ notice }}</div>
+        <div v-if="errorMessage" class="notice notice-error">{{ errorMessage }}</div>
+
         <div class="panel-actions">
           <button class="button" :disabled="busy" @click="diagnose">
-            {{ phase === 'parsing' ? '解析中…' : phase === 'analyzing' ? '诊断中…' : '开始诊断' }}
+            {{ phase === 'analyzing' ? '诊断中…' : '开始诊断' }}
           </button>
-          <span v-if="errorMessage" class="status" data-state="error">{{ errorMessage }}</span>
+          <button v-if="busy" class="button ghost" @click="cancelCurrent">取消请求</button>
+          <span v-if="busy" class="muted">诊断会调用后端模型，通常需要 10–60 秒。</span>
         </div>
       </div>
 

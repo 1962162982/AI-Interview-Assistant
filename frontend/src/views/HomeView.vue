@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api, health, isMockMode } from '../api/client'
+import { clearHistory, formatTimestamp, loadHistory } from '../stores/history'
 
 const scenes = ['实习', '秋招', '保研']
 
@@ -34,7 +35,9 @@ const modules = [
 
 const backendStatus = ref({ state: 'idle', message: '尚未检测' })
 const routes = ref([])
+const routesLoading = ref(false)
 const routesError = ref('')
+const historyState = ref(loadHistory())
 
 async function checkBackend() {
   backendStatus.value = { state: 'loading', message: '检测中…' }
@@ -49,13 +52,31 @@ async function checkBackend() {
   }
 }
 
-onMounted(async () => {
+async function loadRoutes() {
+  routesLoading.value = true
+  routesError.value = ''
   try {
     const data = await api.metaRoutes()
     routes.value = data?.routes ?? []
   } catch (error) {
     routesError.value = error.message
+  } finally {
+    routesLoading.value = false
   }
+}
+
+function refreshHistory() {
+  historyState.value = loadHistory()
+}
+
+function clearAllHistory() {
+  clearHistory()
+  refreshHistory()
+}
+
+onMounted(() => {
+  loadRoutes()
+  refreshHistory()
 })
 </script>
 
@@ -74,6 +95,7 @@ onMounted(async () => {
         <span class="chip">每模块独立模型</span>
         <span class="chip">评测回归关卡</span>
         <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
+        <span v-else class="chip chip-live">真实后端模式</span>
       </div>
     </header>
 
@@ -90,11 +112,16 @@ onMounted(async () => {
       <div>
         <h3>模块 → 模型路由（GET /api/meta/routes）</h3>
         <p class="muted">
-          契约冻结 v1：后端返回 5 条路由的非敏感摘要（模型 / 温度 / 流式 / 超时 / 重试），
+          后端返回 5 条路由的非敏感摘要（模型 / 温度 / 流式 / 超时 / 重试），
           前端据此自查决策④「每模块独立模型」是否生效。
         </p>
       </div>
-      <span v-if="routesError" class="status" data-state="error">{{ routesError }}</span>
+      <div class="panel-actions">
+        <button class="button ghost" :disabled="routesLoading" @click="loadRoutes">
+          {{ routesLoading ? '加载中…' : '刷新路由表' }}
+        </button>
+        <span v-if="routesError" class="status" data-state="error">{{ routesError }}</span>
+      </div>
     </div>
 
     <div v-if="routes.length" class="form-card table-card">
@@ -124,8 +151,8 @@ onMounted(async () => {
       <div>
         <h3>后端连通性自检</h3>
         <p class="muted">
-          调用后端骨架期已确认的接口 <code>GET /health</code>；业务接口按
-          <code>docs/api.md</code> 契约冻结 v1 实现。
+          调用 <code>GET /health</code> 确认后端进程在线；真实模式下所有页面均通过
+          <code>src/api/client.js</code> 调用后端（契约见 <code>docs/api.md</code>）。
         </p>
       </div>
       <div class="panel-actions">
@@ -133,6 +160,60 @@ onMounted(async () => {
           {{ backendStatus.state === 'loading' ? '检测中…' : '检测后端' }}
         </button>
         <span class="status" :data-state="backendStatus.state">{{ backendStatus.message }}</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div>
+        <h3>本地历史记录（localStorage）</h3>
+        <p class="muted">
+          自动保存最近一次简历文本、面试会话（session_id）与报告（report_id），仅存在本机浏览器；
+          刷新页面或重新演示时可复用，也可一键清空。
+        </p>
+      </div>
+      <div class="panel-actions">
+        <button class="button ghost" @click="refreshHistory">刷新历史</button>
+        <button class="button ghost" @click="clearAllHistory">清空历史</button>
+      </div>
+    </div>
+
+    <div class="split-grid">
+      <div class="form-card">
+        <h3 class="section-title">最近简历</h3>
+        <p v-if="historyState.resume" class="muted">
+          来源：{{ historyState.resume.source === 'upload' ? '文件上传' : '粘贴文本' }} ·
+          {{ formatTimestamp(historyState.resume.savedAt) }} · {{ historyState.resume.text.length }} 字
+        </p>
+        <pre v-if="historyState.resume" class="markdown-preview">{{ historyState.resume.text.slice(0, 320) }}{{ historyState.resume.text.length > 320 ? '\n…' : '' }}</pre>
+        <p v-else class="muted">暂无：在「简历诊断」页上传文件或粘贴文本后自动保存。</p>
+      </div>
+
+      <div class="form-card">
+        <h3 class="section-title">面试会话与报告</h3>
+        <ul v-if="historyState.sessions.length" class="placeholder-list">
+          <li v-for="item in historyState.sessions" :key="item.sessionId">
+            <span class="idx">{{ item.scene }}</span>
+            <span>
+              <code>{{ item.sessionId }}</code><br />
+              {{ formatTimestamp(item.createdAt) }} ·
+              <RouterLink class="link-inline" :to="{ path: '/report', query: { session: item.sessionId } }">生成报告</RouterLink>
+            </span>
+          </li>
+        </ul>
+        <p v-else class="muted">暂无面试会话：在「模拟面试」页开始面试后自动记录。</p>
+
+        <h4 class="sub-title">历史报告</h4>
+        <ul v-if="historyState.reports.length" class="placeholder-list">
+          <li v-for="item in historyState.reports" :key="item.reportId">
+            <span class="idx">报告</span>
+            <span>
+              <code>{{ item.reportId }}</code><br />
+              {{ formatTimestamp(item.createdAt) }} ·
+              <RouterLink class="link-inline" :to="{ path: '/report', query: { report: item.reportId } }">查看</RouterLink>
+            </span>
+          </li>
+        </ul>
+        <p v-else class="muted">暂无历史报告：在报告页生成后将自动记录。</p>
       </div>
     </div>
   </section>
