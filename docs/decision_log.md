@@ -95,6 +95,16 @@
 - **约束（写入迭代纪律）**：更换任一模块的模型 / 供应商属于效果变更，**必须先跑评测集，分数不降才允许切换**。
 - **后续动作**：确认两家 Key（DeepSeek / 智谱 GLM）→ 用黄金样本做小样本 A/B → 实测后固化模型名与温度；效果不达标时只改配置即可换模型。
 
+## 2026-10-23 · 阶段 1 完成记录与 Prompt v2 提交口径（临时）
+
+- **事实**：阶段 1 已交付并分批提交——公共底座（`model_router` / `token_counter` / `context_manager` / parser）、四模块服务首版、10 个 Prompt（A/B/C/D + 三场景 + 简历结构化）、评测回归框架（金标准样本 + `run_eval.py`）、Vue 3 前端骨架、`docs/api.md` 契约冻结；全仓 275 项 mock 测试 + 80 subtests 通过，API 15 条路由与前端构建均已本地验证。
+- **Prompt 铁律的临时口径（必须跟踪）**：由于当前**没有可用 API Key**，Prompt v2 修改只完成了「mock 回归」（`run_eval.py` 默认 mock 模式，验证的是评测流水线与回归阈值，不能代表真实效果）。为不阻塞阶段 1 交付，v2 先随阶段 1 提交；在真实回归通过前，**不得基于 v2 继续叠加 Prompt 效果优化**。
+  - 有效 Key 到位后**必须**执行：`python evaluation/run_eval.py --real`（评分路由 `evaluation` 需 GLM-4-Plus Key；复核路由 `cross_review` 需 DeepSeek Key）；
+  - 结果不降 → 保留 v2；结果下降 → 按铁律回滚到 `evaluation/prompt_baselines/` 中的基线版本；
+  - 真实回归结论需补录到本节（追加日期与分数对比）。
+- **Key 状态（截至 2026-10-23）**：用户提供的 DeepSeek Key（脱敏尾号 `****509d`）对 `https://api.deepseek.com` 实测 **401 invalid**；GLM Key 未配置。模块 A 与 `cross_review` 的真实链路验收、以及完整四模块真实链路与真实评测回归，均**阻塞于有效 Key**；已备 `scripts/smoke_deepseek.py`（模块 A + cross_review，退出码 0/2/1），换 Key 后一条命令即可验收。
+- **安全与合规**：所有 Key 仅存本地 `.env`（`.gitignore` 保护），已用 `git log -S` 核验未进入任何提交；所有改动均限 `AI-Interview-Assistant/` 仓库内。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |
