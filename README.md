@@ -68,29 +68,36 @@
 ├── prompts/                 # ⭐⭐ 核心资产一：10 个 Prompt（版本注释 + git 管理）
 ├── evaluation/              # ⭐⭐ 核心资产二：金标准样本 + run_eval.py 强制回归关卡
 ├── data/                    # 素材库（LLM 虚构样例）：resumes / jds / questions / demo
-├── frontend/                # 交互层：Vue 3 + Vite 五页骨架 + API 层（可切 mock）
-├── tests/                   # 286 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
+├── frontend/                # 交互层：Vue 3 + Vite 五页 + 真实后端联调（可 mock / 单进程托管）
+├── tests/                   # 301 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
 └── docs/                    # api.md（契约冻结）/ architecture.md / decision_log.md
 ```
 
-## 当前进度（2026-10-23 · 阶段 1 完成）
+## 当前进度（2026-10-23 · 阶段 1 + 阶段 3 完成）
 
 **已完成**
 - 公共底座：`model_router`（5 路由 / 重试 / 超时 / 流式 / JSON 修复）、`token_counter`、`context_manager`、PDF/DOCX 解析、FastAPI 四组路由（统一响应壳 + 错误码）。
 - 四模块服务首版：A 简历诊断（结构化抽取 + 诊断）、B JD 匹配（两段式）、C 模拟面试（三场景 + 追问决策树 + 会话状态 + 流式）、D 评分 / 交叉复核 / 报告。
 - Prompt v2：A/B/C/D 全部模块 + 三场景变体（10 个文件，全部带版本注释）。
-- 评测：`evaluation/` 金标准样本（3 份简历 + 10 条 Q&A）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）。
-- 前端：Vue 3 + Vite 五页骨架 + `src/api/client.js`（按冻结契约，可切真实后端 / mock）；`vite build` 已验证通过。
-- 测试与契约：`docs/api.md` 契约冻结；全仓 **286 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路已另测（见下）。
+- 评测：`evaluation/` 金标准样本（**8 份简历 + 20 条 Q&A**，第一批已扩充）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）。
+- 前端：Vue 3 + Vite 五页 + 真实后端联调（SSE 增量渲染 / 加载错误态 / localStorage 历史）；真实模式构建通过，可 mock / 单进程托管。
+- 测试与契约：`docs/api.md` 契约冻结；全仓 **301 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路另测（见下）。
 
 **真实联调已验证（2026-10-23 · 临时全 DeepSeek 模式）**
 - `scripts/smoke_deepseek.py`：模块 A 真实诊断/结构化 + cross_review 真实调用全部通过（exit=0）；
 - API 全链路真实调用 200：结构抽取 → 诊断 → JD 提取/匹配 → 模拟面试（含 SSE 流式）→ 报告生成/查询/Markdown，单次 E2E 约 252s；
 - Prompt 真实回归：`run_eval.py --real` 子集尝试中止——v_old（`evaluation/prompt_baselines/scoring_v1.md`，按 GLM 调优的 v1 基线）在 DeepSeek-V4-Pro 下无法产出合法 JSON；v_new（scoring v2）已在 E2E 报告链路产出合法 4 维评分。待恢复决策④配置（GLM 评分模型）后重跑全量回归，详见 `docs/decision_log.md`。
 
+**阶段 3 系统集成（2026-10-23，已完成）**
+- 前端已切真实后端（`VITE_USE_MOCK=false`）：五页全流程 + SSE 增量渲染 + 加载/错误/取消态 + localStorage 历史；真实模式构建 exit 0（37 modules，产物无 mock 残留）。
+- 后端单进程演示：`frontend/dist` 存在时 FastAPI 托管 `/` 与 SPA 回退、`/assets/*`；`/api` 契约不变；CORS（5173）预检通过。
+- 真实端到端验收 `scripts/e2e_real.py --with-report`：**13/13 通过**（真实模型链路含报告/Markdown，约 5.6 min）。
+- 阶段 4 第一批：golden_qa **20 条**、golden_resumes **8 份**（目标 30 / 20）。
+
 **待完成**
 - 恢复双供应商混用：补 GLM Key 后删除 `.env` 的 `MODELS_CONFIG_PATH` 切回 `models.yaml`（决策④），并按铁律跑全量真实评测回归；
-- 阶段 2/3：真流式/历史记录体验、评测集扩展（20 简历 / 30 条 Q&A）、部署与演示脚本。
+- 阶段 4 剩余：golden_resumes 8→20、golden_qa 20→30；评分一致性抽样验证、模型分配 A/B；
+- 阶段 5：演示视频/现场 demo 脚本、部署/打包、项目报告材料。
 
 ## 快速开始
 
@@ -122,13 +129,29 @@ Copy-Item .env.example .env      # Windows PowerShell；Linux/macOS 用 cp
 > 注：临时全 DeepSeek 模式下 `evaluation/run_eval.py --real` 也用 DeepSeek Key 即可跑；
 > 恢复双供应商混用后才需要 GLM 评分 Key（`EVALUATION_API_KEY`，路由 evaluation = glm-4-plus）。
 
+**真实端到端验收**（需后端已启动；默认跳过报告生成以控制成本）：
+
+```bash
+.\.venv\Scripts\python.exe scripts/e2e_real.py                 # 主流程：解析→诊断→JD匹配→面试(SSE)→结束
+.\.venv\Scripts\python.exe scripts/e2e_real.py --with-report   # 追加：评分/交叉复核/报告/Markdown
+# 退出码：0=通过；1=任一步骤失败；2=无法连接后端
+```
+
 前端（需 Node.js 18+；或使用演示机预构建）：
 
 ```bash
 cd frontend
 pnpm install
-pnpm dev          # 默认 mock 数据层
+pnpm dev          # 默认 mock 数据层；本地 .env 可设 VITE_USE_MOCK=false 联调真实后端
 pnpm build        # 产物在 frontend/dist（已被 .gitignore 忽略）
+```
+
+**单进程演示**（前端构建后由 FastAPI 同时托管页面与 `/api`）：
+
+```bash
+cd frontend && pnpm build && cd ..
+.\.venv\Scripts\python.exe -m uvicorn backend.main:app --port 8000
+# 打开 http://127.0.0.1:8000 （SPA 页面 + API 同端口）
 ```
 
 ## Prompt 迭代纪律（项目铁律）

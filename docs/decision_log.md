@@ -130,6 +130,14 @@
   - **Prompt 真实回归未完成（非 v2 回归，属临时模型/基线不匹配）**：`run_eval.py --real` 子集（3 样本 × 3 档）在 v_old（`evaluation/prompt_baselines/scoring_v1.md`，按 GLM 调优的历史 v1 基线）阶段中止——DeepSeek-V4-Pro 对该 Prompt 的输出不满足 `InterviewEvaluation`（`dimensions` 实际 0 项 / weaknesses、suggestions 类型不符）；v_new（`prompts/scoring.md` v2）在 E2E 报告链路中已产出合法 4 维评分。
   - **结论**：临时全 DeepSeek 模式下无法完成“同一模型下 v1 vs v2”的回归比较；Prompt v2 维持“临时提交”口径（见 2026-10-23 阶段 1 记录）。待 GLM Key 到位、恢复决策④原配置后，按铁律重跑全量真实回归，再决定 v2 固化或回滚。
 
+## 2026-10-23 · 阶段 3 集成联调完成（临时全 DeepSeek 模式）
+
+- **前端真实联调**：5 个页面切真实后端（`.env` 中 `VITE_USE_MOCK=false`，本地 `.env` 不入库），补齐 SSE 增量渲染、加载/错误/取消态、localStorage 历史记录；真实模式 `pnpm build` exit 0（37 modules，产物无 mock 残留）。
+- **单进程演示托管**：`backend/main.py` 在 `frontend/dist` 存在时托管 `/`、`/assets/*` 与 SPA 回退；`/api`、`/health`、`/docs`、`/openapi.json` 不受影响；契约（15 条）零变更；CORS 5173 预检通过。
+- **真实端到端验收**：新增 `scripts/e2e_real.py`；在真实后端（临时全 DeepSeek）执行 `--with-report`：**13/13 步通过**（结构→诊断→JD 提取/匹配→面试建会话/SSE/结束→报告生成/查询/Markdown，约 5.6 min）；真实模型调用产生费用，脚本默认跳过报告、需显式 `--with-report`。
+- **评测集扩充第一批**：`evaluation/golden_qa` 10→**20 条**、`golden_resumes` 3→**8 份**（全虚构脱敏，测试与 mock 回归全绿：`pytest evaluation` 56 passed、`run_eval.py` mock PASS）。
+- **遗留**：① 仍为临时全 DeepSeek 模式，恢复决策④双供应商需 GLM Key + 全量真实回归；② JD 匹配雷达图（加分项）未做；③ 阶段 4 目标 20 简历 / 30 QA 尚未补齐。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |
