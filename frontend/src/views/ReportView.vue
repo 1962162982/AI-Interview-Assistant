@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { api, isMockMode } from '../api/client'
+import { api } from '../api/client'
 import { addReport, formatTimestamp, getLatestReport, getLatestSession, loadHistory } from '../stores/history'
 
 // 模块 D 即时反馈：真实调用 POST /api/report/generate 或 GET /api/report/{rid}（契约 docs/api.md「五」）。
@@ -116,9 +116,8 @@ onMounted(() => {
     reportInput.value = String(query.report)
     fetchReport()
   } else if (query.session) {
+    // 从面试页跳转过来时预填会话号，由用户确认后再生成报告（避免自动产生模型调用费用）
     sessionInput.value = String(query.session)
-    // Mock 模式数据即时返回，可直接自动生成；真实模式需用户确认（2 次模型调用）
-    if (isMockMode) generateReport()
   } else {
     const latestSession = getLatestSession()
     if (latestSession) sessionInput.value = latestSession.sessionId
@@ -131,29 +130,27 @@ onMounted(() => {
 <template>
   <section class="page">
     <header class="page-header">
-      <p class="eyebrow">模块 D · 反馈报告</p>
+      <p class="eyebrow">反馈报告</p>
       <h2>可解释的面试反馈：维度分 + 原文证据 + 交叉复核</h2>
       <p class="lead">
-        评分遵循 4 维度 rubric（各 1–10 分），并强制先引用原文证据再给分；证据不足两条时该维度不得高于 6 分。
-        面试结束时由另一供应商模型交叉复核，报告包含偏差说明，可导出 Markdown。
+        评分从 4 个维度给出（各 1–10 分），并要求先引用你的原话作为证据；证据不足时该维度分数会被限制。
+        面试结束后还会由另一个模型交叉复核，报告可导出为 Markdown。
       </p>
       <div class="chip-row">
-        <span class="chip">4 维度 rubric</span>
-        <span class="chip">强制 grounding</span>
+        <span class="chip">4 维度评分</span>
+        <span class="chip">原文证据</span>
         <span class="chip">交叉复核</span>
         <span class="chip">Markdown 导出</span>
-        <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
-        <span v-else class="chip chip-live">真实后端模式</span>
       </div>
     </header>
 
     <div class="split-grid">
       <div class="form-card">
-        <h3 class="section-title">生成新报告（POST /api/report/generate）</h3>
+        <h3 class="section-title">生成新报告</h3>
         <div class="field">
-          <label for="session-id">面试会话 ID（session_id）</label>
+          <label for="session-id">面试会话号</label>
           <input id="session-id" v-model="sessionInput" class="input" type="text" placeholder="例如 sess_20261023_ab12cd" :disabled="busy" />
-          <span class="hint">会调用逐题评分 + 交叉复核模型（≥2 次调用），请确认成本后再点击。</span>
+          <span class="hint">报告需要逐题评分与交叉复核，通常需要 1–2 分钟。</span>
         </div>
         <div class="panel-actions">
           <button class="button" :disabled="!canGenerate" @click="generateReport">
@@ -163,11 +160,11 @@ onMounted(() => {
       </div>
 
       <div class="form-card">
-        <h3 class="section-title">拉取已有报告（GET /api/report/{'{rid}'}）</h3>
+        <h3 class="section-title">查看历史报告</h3>
         <div class="field">
-          <label for="report-id">报告 ID（report_id）</label>
+          <label for="report-id">报告编号</label>
           <input id="report-id" v-model="reportInput" class="input" type="text" placeholder="例如 rep_20261023_x1y2z3" :disabled="busy" />
-          <span class="hint">只读取已生成报告，不触发模型调用（免费）。</span>
+          <span class="hint">仅读取已生成的报告，不会重新评分。</span>
         </div>
         <div class="panel-actions">
           <button class="button" :disabled="!canFetch" @click="fetchReport">
@@ -178,9 +175,9 @@ onMounted(() => {
     </div>
 
     <div class="form-card">
-      <h3 class="section-title">本地历史（localStorage）</h3>
+      <h3 class="section-title">最近记录</h3>
       <p class="muted">
-        最近会话：<code>{{ historyState.sessions[0]?.sessionId || '--' }}</code>
+        最近面试：<code>{{ historyState.sessions[0]?.sessionId || '--' }}</code>
         （{{ historyState.sessions[0] ? formatTimestamp(historyState.sessions[0].createdAt) : '暂无' }}） ·
         最近报告：<code>{{ historyState.reports[0]?.reportId || '--' }}</code>
         （{{ historyState.reports[0] ? formatTimestamp(historyState.reports[0].createdAt) : '暂无' }}）
@@ -241,7 +238,7 @@ onMounted(() => {
           <div class="form-card">
             <h3 class="section-title">交叉复核</h3>
             <p class="muted">
-              结论：{{ report.cross_review?.agreed ? '复核模型认可首评' : '复核模型有调整建议' }}；
+              结论：{{ report.cross_review?.agreed ? '复核结果与评分一致' : '复核结果有调整建议' }}；
               说明：{{ report.cross_review?.deviation_note || '暂无' }}
             </p>
             <ul v-if="report.cross_review?.adjustments?.length" class="plain-list">
@@ -250,7 +247,7 @@ onMounted(() => {
           </div>
           <div class="form-card">
             <h3 class="section-title">导出报告</h3>
-            <p class="muted">报告 ID：<code>{{ report.report_id }}</code></p>
+            <p class="muted">报告编号：<code>{{ report.report_id }}</code></p>
             <div class="panel-actions">
               <button class="button" @click="downloadMarkdown">下载 Markdown</button>
             </div>
@@ -267,7 +264,7 @@ onMounted(() => {
 
     <div v-else class="form-card">
       <div class="placeholder-block">
-        输入会话 ID 生成报告，或输入报告 ID 拉取历史报告；完成后在此展示维度分 + 证据 + 交叉复核。
+        输入面试会话号生成报告，或输入报告编号查看历史报告；完成后在此展示维度分、原文证据与交叉复核。
       </div>
     </div>
   </section>

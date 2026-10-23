@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { isMockMode } from './api/client'
 
 const route = useRoute()
 
@@ -23,7 +22,7 @@ const currentTitle = computed(() => route.meta.title || '首页')
         <span class="brand-mark">AI</span>
         <div>
           <h1 class="brand-title">AI 模拟面试与简历诊断助手</h1>
-          <p class="brand-subtitle">纯 Prompt 工程 · DeepSeek + GLM 双供应商 · 每模块独立模型</p>
+          <p class="brand-subtitle">简历诊断 · 岗位匹配 · 模拟面试 · 反馈报告</p>
         </div>
       </div>
       <nav class="app-nav" aria-label="主导航">
@@ -44,9 +43,8 @@ const currentTitle = computed(() => route.meta.title || '首页')
     </main>
 
     <footer class="app-footer">
-      <span>课程项目 · 交互层（Vue 3 + Vite）</span>
+      <span>AI 模拟面试与简历诊断助手 · 仅供学习演示</span>
       <span>当前页面：{{ currentTitle }}</span>
-      <span>{{ isMockMode ? 'Mock 数据模式（VITE_USE_MOCK=true）' : '真实后端模式' }}</span>
     </footer>
   </div>
 </template>

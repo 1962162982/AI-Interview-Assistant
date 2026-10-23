@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, isMockMode } from '../api/client'
+import { api } from '../api/client'
 import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
 import { addSession, getResume } from '../stores/history'
 
@@ -166,18 +166,16 @@ async function endInterview() {
 <template>
   <section class="page">
     <header class="page-header">
-      <p class="eyebrow">模块 C · 模拟面试</p>
-      <h2>会追问的模拟面试：角色卡 + 追问决策树 + 三场景</h2>
+      <p class="eyebrow">模拟面试</p>
+      <h2>会追问的模拟面试：像真实面试一样练</h2>
       <p class="lead">
-        面试官基于结构化简历与 JD 生成首问，并根据回答按显式追问决策树动态追问：
-        回答含糊→追究数据来源；出现技术名词→深挖原理；与 JD 冲突→温和质疑；连续追问 ≥2 次→强制换向。
+        面试官会基于你的简历与目标岗位生成问题，并根据回答继续追问：
+        回答含糊会追问数据来源，出现技术名词会深挖原理，连续追问过多会自动换方向。
       </p>
       <div class="chip-row">
         <span class="chip">三场景：实习 / 秋招 / 保研</span>
-        <span class="chip">追问决策树</span>
-        <span class="chip">SSE 流式输出</span>
-        <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
-        <span v-else class="chip chip-live">真实后端模式</span>
+        <span class="chip">动态追问</span>
+        <span class="chip">逐字流式对话</span>
       </div>
     </header>
 
@@ -194,7 +192,7 @@ async function endInterview() {
           {{ item.label }}
         </label>
       </div>
-      <span class="hint">三场景均在契约中实现（intern / autumn / grad），默认实习场景；不同场景语气与问题侧重不同。</span>
+      <span class="hint">支持实习 / 秋招 / 保研三种场景，默认实习；不同场景的语气与问题侧重不同。</span>
       <div class="panel-actions">
         <button class="button" :disabled="busy || phase === 'chatting'" @click="startInterview">
           {{ phase === 'creating' ? '创建会话…' : phase === 'chatting' ? '面试进行中' : '开始面试' }}
@@ -223,7 +221,7 @@ async function endInterview() {
         </div>
         <div v-else class="chat-empty">
           会话未开始<br />
-          点击「开始面试」后，面试官首问与多轮追问将以流式（SSE）逐字显示
+          点击「开始面试」后，面试官首问与多轮追问会逐字显示
         </div>
 
         <div class="field">
@@ -255,20 +253,17 @@ async function endInterview() {
             <li><span class="idx">深</span><span>追问深度：{{ currentQuestion?.follow_up_depth ?? '--' }}</span></li>
             <li><span class="idx">轮</span><span>已进行：{{ sessionState?.turn_index ?? 0 }} 轮</span></li>
             <li><span class="idx">时</span><span>面试用时：{{ clockText }}</span></li>
-            <li><span class="idx">量</span><span>上下文占用：{{ sessionState?.context_usage_pct ?? 0 }}%</span></li>
-            <li><span class="idx">ID</span><span>会话：<code>{{ sessionId || '--' }}</code></span></li>
+            <li><span class="idx">ID</span><span>会话号：<code>{{ sessionId || '--' }}</code></span></li>
           </ul>
         </div>
         <div v-if="currentQuestion" class="form-card">
-          <h3 class="section-title">当前追问方向</h3>
-          <p class="muted">direction：<code>{{ currentQuestion.direction }}</code></p>
-          <p class="muted">follow_up_depth：{{ currentQuestion.follow_up_depth }}</p>
-          <p class="muted">命中追问决策树后，后端返回对应 rule_id / direction，便于联调核对。</p>
-          <p class="muted">追问提示：同一方向连续追问 ≥2 次将强制换向（D5），单方向深度上限 3。</p>
+          <h3 class="section-title">追问提示</h3>
+          <p class="muted">当前追问方向：{{ currentQuestion.direction || '--' }}（追问深度 {{ currentQuestion.follow_up_depth ?? 0 }}）</p>
+          <p class="muted">同一方向连续追问 ≥2 次会自动换方向，单方向深度上限 3，避免一直追问同一个点。</p>
         </div>
         <div class="form-card">
-          <h3 class="section-title">上下文管理</h3>
-          <p class="muted">每 5 轮滚动摘要 + 接近 90% 窗口阈值自动压缩，保证 30 分钟面试不中断（context_manager）。</p>
+          <h3 class="section-title">长对话保障</h3>
+          <p class="muted">系统会自动压缩较早的对话内容，保证 30 分钟左右的面试不中断。</p>
         </div>
       </div>
     </div>

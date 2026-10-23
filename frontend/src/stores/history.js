@@ -12,10 +12,25 @@
  * }
  */
 const STORAGE_KEY = 'aia.history.v1'
+const DIAGNOSIS_KEY = 'aia.resumeDiagnosis.v1'
 const MAX_ITEMS = 10
 
 function emptyState() {
-  return { resume: null, sessions: [], reports: [] }
+  return { resume: null, sessions: [], reports: [], resumeDiagnosis: null }
+}
+
+function readDiagnosis() {
+  const storage = getStorage()
+  if (!storage) return null
+  try {
+    const raw = storage.getItem(DIAGNOSIS_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || !parsed.report) return null
+    return parsed
+  } catch {
+    return null
+  }
 }
 
 function getStorage() {
@@ -40,6 +55,7 @@ export function loadHistory() {
       resume: parsed.resume && typeof parsed.resume === 'object' ? parsed.resume : null,
       sessions: Array.isArray(parsed.sessions) ? parsed.sessions.slice(0, MAX_ITEMS) : [],
       reports: Array.isArray(parsed.reports) ? parsed.reports.slice(0, MAX_ITEMS) : [],
+      resumeDiagnosis: readDiagnosis(),
     }
   } catch {
     return emptyState()
@@ -113,12 +129,36 @@ export function getLatestReport() {
   return loadHistory().reports[0] || null
 }
 
+/** 保存最近一次简历诊断报告（诊断成功后调用，供独立报告页读取） */
+export function saveResumeDiagnosis({ report, targetRole = '', resumeName = '' }) {
+  const storage = getStorage()
+  if (!storage || !report) return getResumeDiagnosis()
+  const payload = {
+    report,
+    targetRole,
+    resumeName,
+    savedAt: new Date().toISOString(),
+  }
+  try {
+    storage.setItem(DIAGNOSIS_KEY, JSON.stringify(payload))
+  } catch {
+    // 配额不足等异常不影响主流程
+  }
+  return payload
+}
+
+/** 读取最近一次简历诊断报告（独立报告页 / 首页入口使用） */
+export function getResumeDiagnosis() {
+  return readDiagnosis()
+}
+
 /** 清空本地历史（首页「清空历史」按钮） */
 export function clearHistory() {
   const storage = getStorage()
   if (!storage) return
   try {
     storage.removeItem(STORAGE_KEY)
+    storage.removeItem(DIAGNOSIS_KEY)
   } catch {
     // ignore
   }

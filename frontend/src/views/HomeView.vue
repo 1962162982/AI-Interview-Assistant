@@ -1,69 +1,38 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { api, health, isMockMode } from '../api/client'
 import { clearHistory, formatTimestamp, loadHistory } from '../stores/history'
 
 const scenes = ['实习', '秋招', '保研']
 
 const modules = [
   {
-    tag: 'A',
+    tag: '01',
     title: '简历诊断',
     path: '/resume',
-    desc: '解析 → 脱敏 → 结构化抽取 → 5 项检查清单 → 问题清单与改写示例',
+    desc: '上传或粘贴简历，按 5 项检查清单定位问题，给出原文证据与改写建议',
   },
   {
-    tag: 'B',
+    tag: '02',
     title: 'JD 匹配',
     path: '/jd',
-    desc: '两段式调用：JD 能力项抽取 → 逐项对齐评分 → 匹配度 + 差距清单',
+    desc: '对照目标岗位要求逐项分析，看到 0–100 匹配分、能力差距与补齐建议',
   },
   {
-    tag: 'C',
+    tag: '03',
     title: '模拟面试',
     path: '/interview',
-    desc: '角色卡 + 追问决策树 + 实习/秋招/保研三场景，多轮流式对话',
+    desc: '实习 / 秋招 / 保研三场景，多轮追问 + 逐字流式对话，像真实面试一样练习',
   },
   {
-    tag: 'D',
+    tag: '04',
     title: '反馈报告',
     path: '/report',
-    desc: '4 维度 rubric + 强制引用证据 + 交叉复核 + 报告导出',
+    desc: '4 个维度评分 + 原文证据 + 交叉复核，生成可导出的面试反馈报告',
   },
 ]
 
-const backendStatus = ref({ state: 'idle', message: '尚未检测' })
-const routes = ref([])
-const routesLoading = ref(false)
-const routesError = ref('')
 const historyState = ref(loadHistory())
-
-async function checkBackend() {
-  backendStatus.value = { state: 'loading', message: '检测中…' }
-  try {
-    const data = await health()
-    backendStatus.value = {
-      state: 'ok',
-      message: data?.status === 'ok' ? '后端在线（GET /health 正常）' : `后端已响应：${JSON.stringify(data)}`,
-    }
-  } catch (error) {
-    backendStatus.value = { state: 'error', message: error.message }
-  }
-}
-
-async function loadRoutes() {
-  routesLoading.value = true
-  routesError.value = ''
-  try {
-    const data = await api.metaRoutes()
-    routes.value = data?.routes ?? []
-  } catch (error) {
-    routesError.value = error.message
-  } finally {
-    routesLoading.value = false
-  }
-}
 
 function refreshHistory() {
   historyState.value = loadHistory()
@@ -75,7 +44,6 @@ function clearAllHistory() {
 }
 
 onMounted(() => {
-  loadRoutes()
   refreshHistory()
 })
 </script>
@@ -83,19 +51,16 @@ onMounted(() => {
 <template>
   <section class="page">
     <header class="page-header">
-      <p class="eyebrow">课程项目 · Web 应用</p>
-      <h2>从简历到面试反馈，一条可演示的 AI 求职练习链路</h2>
+      <p class="eyebrow">AI 求职练习</p>
+      <h2>从简历到面试反馈，一条完整的练习链路</h2>
       <p class="lead">
-        学生提供简历与目标岗位 JD，系统完成「简历诊断 — JD 匹配 — 模拟面试 — 即时反馈」四步，
-        最终产出可解释、可回溯的面试反馈报告。技术路线为纯 Prompt 工程，不涉及模型微调。
+        上传简历、粘贴目标岗位 JD，系统带你完成「简历诊断 — JD 匹配 — 模拟面试 — 反馈报告」四步，
+        每一步都能看到具体的问题、证据与改进建议。
       </p>
       <div class="chip-row">
         <span v-for="scene in scenes" :key="scene" class="chip">{{ scene }}场景</span>
-        <span class="chip">四层架构</span>
-        <span class="chip">每模块独立模型</span>
-        <span class="chip">评测回归关卡</span>
-        <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
-        <span v-else class="chip chip-live">真实后端模式</span>
+        <span class="chip">会追问的模拟面试</span>
+        <span class="chip">可解释的评分报告</span>
       </div>
     </header>
 
@@ -110,65 +75,9 @@ onMounted(() => {
 
     <div class="panel">
       <div>
-        <h3>模块 → 模型路由（GET /api/meta/routes）</h3>
+        <h3>本地历史记录</h3>
         <p class="muted">
-          后端返回 5 条路由的非敏感摘要（模型 / 温度 / 流式 / 超时 / 重试），
-          前端据此自查决策④「每模块独立模型」是否生效。
-        </p>
-      </div>
-      <div class="panel-actions">
-        <button class="button ghost" :disabled="routesLoading" @click="loadRoutes">
-          {{ routesLoading ? '加载中…' : '刷新路由表' }}
-        </button>
-        <span v-if="routesError" class="status" data-state="error">{{ routesError }}</span>
-      </div>
-    </div>
-
-    <div v-if="routes.length" class="form-card table-card">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>路由（模块）</th>
-            <th>模型</th>
-            <th>温度</th>
-            <th>流式</th>
-            <th>超时 / 重试</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="route in routes" :key="route.route">
-            <td><code>{{ route.route }}</code></td>
-            <td>{{ route.model }}</td>
-            <td>{{ route.temperature }}</td>
-            <td>{{ route.stream ? '是' : '否' }}</td>
-            <td>{{ route.timeout }}s / {{ route.max_retries }} 次</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <div class="panel">
-      <div>
-        <h3>后端连通性自检</h3>
-        <p class="muted">
-          调用 <code>GET /health</code> 确认后端进程在线；真实模式下所有页面均通过
-          <code>src/api/client.js</code> 调用后端（契约见 <code>docs/api.md</code>）。
-        </p>
-      </div>
-      <div class="panel-actions">
-        <button class="button" :disabled="backendStatus.state === 'loading'" @click="checkBackend">
-          {{ backendStatus.state === 'loading' ? '检测中…' : '检测后端' }}
-        </button>
-        <span class="status" :data-state="backendStatus.state">{{ backendStatus.message }}</span>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div>
-        <h3>本地历史记录（localStorage）</h3>
-        <p class="muted">
-          自动保存最近一次简历文本、面试会话（session_id）与报告（report_id），仅存在本机浏览器；
-          刷新页面或重新演示时可复用，也可一键清空。
+          自动保存最近一次简历、诊断报告、面试会话与反馈报告，仅存在本机浏览器，可随时一键清空。
         </p>
       </div>
       <div class="panel-actions">
@@ -186,6 +95,9 @@ onMounted(() => {
         </p>
         <pre v-if="historyState.resume" class="markdown-preview">{{ historyState.resume.text.slice(0, 320) }}{{ historyState.resume.text.length > 320 ? '\n…' : '' }}</pre>
         <p v-else class="muted">暂无：在「简历诊断」页上传文件或粘贴文本后自动保存。</p>
+        <div v-if="historyState.resumeDiagnosis" class="panel-actions">
+          <RouterLink class="button ghost" to="/resume-report">查看最近诊断报告 →</RouterLink>
+        </div>
       </div>
 
       <div class="form-card">

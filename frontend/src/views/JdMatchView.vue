@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { api, isMockMode } from '../api/client'
+import { api } from '../api/client'
 import { SAMPLE_JD_TEXT, SAMPLE_RESUME_TEXT } from '../data/samples'
 import { formatTimestamp, getResume, saveResume } from '../stores/history'
 import { buildRadarData } from '../utils/radar'
@@ -36,8 +36,8 @@ const radarAriaLabel = computed(() => {
 })
 
 const pipeline = [
-  { step: '①', title: 'JD 结构化抽取', detail: '低温（0.2）调用，输出岗位 / 职责 / 能力项（JDStructured）' },
-  { step: '②', title: '逐项对齐评分', detail: '简历能力项 × JD 能力项 → 匹配度（0–100）+ 差距清单' },
+  { step: '①', title: '拆解岗位要求', detail: '从 JD 中拆出职责与能力项，明确岗位真正看重什么' },
+  { step: '②', title: '逐项对照简历', detail: '把简历能力与岗位要求逐项比对，得到匹配度与差距清单' },
 ]
 
 function fillSampleJd() {
@@ -90,18 +90,17 @@ async function match() {
 <template>
   <section class="page">
     <header class="page-header">
-      <p class="eyebrow">模块 B · JD 匹配</p>
-      <h2>看懂 JD 的潜台词：匹配度与差距清单</h2>
+      <p class="eyebrow">JD 匹配</p>
+      <h2>看懂岗位要求：匹配度、能力差距与补齐建议</h2>
       <p class="lead">
-        输入目标岗位 JD，后端先做结构化能力项抽取，再与结构化简历逐项对齐评分。
-        两段式调用保证每一步可控、可分别评测——这是本项目 Prompt 策略的要点之一。
+        输入目标岗位 JD，系统会把岗位要求拆解成具体能力项，再与你的简历逐项对照，
+        给出 0–100 匹配度、差距清单和雷达图，帮你判断“还差什么、怎么补”。
       </p>
       <div class="chip-row">
-        <span class="chip">两段式调用</span>
         <span class="chip">0–100 匹配度</span>
+        <span class="chip">逐项能力对比</span>
         <span class="chip">差距清单</span>
-        <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
-        <span v-else class="chip chip-live">真实后端模式</span>
+        <span class="chip">5 维雷达图</span>
       </div>
     </header>
 
@@ -136,13 +135,13 @@ async function match() {
           </button>
           <button v-if="busy" class="button ghost" @click="cancelCurrent">取消请求</button>
           <button class="button ghost" :disabled="busy" @click="fillSampleJd">填入示例 JD</button>
-          <span v-if="busy" class="muted">匹配会调用后端模型，通常需要 10–90 秒。</span>
+          <span v-if="busy" class="muted">匹配通常需要 10–90 秒，请耐心等待。</span>
         </div>
       </div>
 
       <div class="stack">
         <div class="form-card">
-          <h3 class="section-title">两段式调用</h3>
+          <h3 class="section-title">匹配是怎么算的</h3>
           <ul class="placeholder-list">
             <li v-for="item in pipeline" :key="item.title">
               <span class="idx">{{ item.step }}</span>
@@ -168,10 +167,9 @@ async function match() {
           </div>
 
           <div class="form-card radar-card">
-            <h3 class="section-title">能力雷达图（SVG · 无第三方库）</h3>
+            <h3 class="section-title">能力雷达图</h3>
             <p class="muted">
-              由 items 的 matched / partial / missing 与总分推导 5 个维度（规则见下方文本列表）；
-              悬停顶点可看数值与推导规则，文本列表是无障碍等价信息（aria-label 同步提供整体描述）。
+              从 5 个维度展示你与岗位要求的匹配情况；悬停顶点可看数值与计算口径，右侧文本列表为等价信息。
             </p>
             <div v-if="radarData" class="radar-layout">
               <svg class="radar-svg" :viewBox="radarData.viewBox" role="img" :aria-label="radarAriaLabel">
@@ -244,9 +242,9 @@ async function match() {
                   </li>
                 </ul>
                 <p class="muted radar-summary">
-                  样本：{{ radarData.meta.total }} 个能力项（matched {{ radarData.meta.matched }} /
-                  partial {{ radarData.meta.partial }} / missing {{ radarData.meta.missing }}），
-                  总分 {{ radarData.meta.score ?? '--' }} / 100。
+                  本次共 {{ radarData.meta.total }} 个能力项（已覆盖 {{ radarData.meta.matched }} ·
+                  部分覆盖 {{ radarData.meta.partial }} · 缺失 {{ radarData.meta.missing }}），
+                  总体匹配度 {{ radarData.meta.score ?? '--' }} / 100。
                 </p>
               </div>
             </div>

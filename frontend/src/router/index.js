@@ -16,6 +16,12 @@ const routes = [
     meta: { title: '简历诊断' },
   },
   {
+    path: '/resume-report',
+    name: 'resumeReport',
+    component: () => import('../views/ResumeReportView.vue'),
+    meta: { title: '诊断报告' },
+  },
+  {
     path: '/jd',
     name: 'jd',
     component: () => import('../views/JdMatchView.vue'),

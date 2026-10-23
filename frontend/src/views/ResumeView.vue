@@ -1,13 +1,12 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { api, isMockMode } from '../api/client'
+import { useRouter } from 'vue-router'
+import { api } from '../api/client'
 import { SAMPLE_RESUME_TEXT } from '../data/samples'
-import { getResume, saveResume } from '../stores/history'
+import { formatTimestamp, getResume, getResumeDiagnosis, saveResume, saveResumeDiagnosis } from '../stores/history'
 
-// 模块 A 简历诊断：真实调用 /api/resume/parse + /api/resume/diagnose（契约 docs/api.md「三」）。
-// - 上传解析为本地解析，不消耗模型调用；诊断会调用模型（resume_diagnosis 路由）。
-// - 上传/诊断均支持取消（AbortController），请求超时由 client.js 统一处理。
-const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
+// 简历诊断：真实调用 /api/resume/parse + /api/resume/diagnose。
+// 诊断完成后保存报告并跳转到独立的「诊断报告」页（/resume-report），避免在窄栏中查看长报告。
 const checks = [
   { title: '量化表达', detail: '是否有可验证的数字、指标与结果' },
   { title: '动词弱化', detail: '「参与 / 负责」等弱动词是否可替换为具体动作' },
@@ -16,14 +15,15 @@ const checks = [
   { title: '错别字格式', detail: '标点、时间线、中英文混排等格式问题' },
 ]
 
+const router = useRouter()
 const previousResume = getResume()
 const resumeText = ref(previousResume?.text || '')
 const targetRole = ref('后端开发实习生')
 const uploadName = ref(previousResume?.filename || '')
-const phase = ref('idle') // idle | parsing | analyzing | done
+const phase = ref('idle') // idle | parsing | analyzing
 const errorMessage = ref('')
 const notice = ref('')
-const diagnosis = ref(null)
+const lastReport = ref(getResumeDiagnosis())
 let activeController = null
 
 const busy = computed(() => phase.value === 'parsing' || phase.value === 'analyzing')
@@ -65,7 +65,6 @@ async function onFileChange(event) {
 function fillSample() {
   resumeText.value = SAMPLE_RESUME_TEXT
   uploadName.value = ''
-  diagnosis.value = null
   errorMessage.value = ''
   notice.value = '已填入虚构示例简历，可直接点击「开始诊断」。'
   phase.value = 'idle'
@@ -83,7 +82,7 @@ async function diagnose() {
   const localController = new AbortController()
   activeController = localController
   try {
-    diagnosis.value = await api.resumeDiagnose({
+    const report = await api.resumeDiagnose({
       resume_text: resumeText.value.trim(),
       target_role: targetRole.value.trim() || undefined,
     }, { signal: localController.signal })
@@ -92,8 +91,14 @@ async function diagnose() {
       filename: uploadName.value,
       source: uploadName.value ? 'upload' : 'paste',
     })
-    phase.value = 'done'
-    notice.value = '诊断完成；结果已保存为本地历史，可在 JD 匹配 / 模拟面试中复用。'
+    lastReport.value = saveResumeDiagnosis({
+      report,
+      targetRole: targetRole.value.trim(),
+      resumeName: uploadName.value,
+    })
+    notice.value = '诊断完成，正在打开完整诊断报告…'
+    phase.value = 'idle'
+    router.push('/resume-report')
   } catch (error) {
     if (error.cancelled) notice.value = '已取消诊断请求。'
     else errorMessage.value = error.message
@@ -107,18 +112,16 @@ async function diagnose() {
 <template>
   <section class="page">
     <header class="page-header">
-      <p class="eyebrow">模块 A · 简历诊断</p>
-      <h2>解析简历，按 5 项检查清单给出可执行的改写建议</h2>
+      <p class="eyebrow">简历诊断</p>
+      <h2>让简历更有说服力：找到问题，并给出可执行的改写建议</h2>
       <p class="lead">
-        上传 PDF / DOCX 或粘贴纯文本 → 解析与脱敏 → 结构化抽取（ResumeStructured）→
-        输出问题清单、优先级、原文引用与改写示例。结构化简历是后续 JD 匹配、模拟面试与评分的公共依赖。
+        上传 PDF / DOCX 或粘贴简历文本，系统会从量化表达、动词、岗位关键词、结构与格式五个方面检查，
+        逐条给出原文证据与改写示例；完整报告将在新页面中全屏展示，便于对照修改。
       </p>
       <div class="chip-row">
         <span class="chip">5 项检查清单</span>
-        <span class="chip">强制引用原文</span>
-        <span class="chip">few-shot 改写</span>
-        <span v-if="isMockMode" class="chip chip-accent">Mock 数据模式</span>
-        <span v-else class="chip chip-live">真实后端模式</span>
+        <span class="chip">引用原文证据</span>
+        <span class="chip">逐条改写建议</span>
       </div>
     </header>
 
@@ -128,7 +131,7 @@ async function diagnose() {
           <label for="resume-file">上传简历（PDF / DOCX）</label>
           <div class="upload-zone">
             <strong>{{ uploadName || '选择文件后自动解析' }}</strong>
-            <span>调用 <code>POST /api/resume/parse</code>（本地解析，不调用模型）；扫描件 / 乱码返回降级标记。</span>
+            <span>支持 PDF / DOCX；扫描件或乱码时可改用下方「粘贴文本」通道。</span>
             <div class="inline-actions">
               <label class="button file-button">
                 {{ phase === 'parsing' ? '解析中…' : '选择文件' }}
@@ -148,7 +151,7 @@ async function diagnose() {
             rows="9"
             placeholder="粘贴纯文本简历，或点击上方「填入示例简历」"
           ></textarea>
-          <span class="hint">当前 {{ charCount }} 字；上传成功或诊断后会保存到本地历史（localStorage）。</span>
+          <span class="hint">当前 {{ charCount }} 字；诊断完成后会自动打开完整报告页。</span>
         </div>
 
         <div class="field">
@@ -164,7 +167,7 @@ async function diagnose() {
             {{ phase === 'analyzing' ? '诊断中…' : '开始诊断' }}
           </button>
           <button v-if="busy" class="button ghost" @click="cancelCurrent">取消请求</button>
-          <span v-if="busy" class="muted">诊断会调用后端模型，通常需要 10–60 秒。</span>
+          <span v-if="busy" class="muted">诊断通常需要 10–60 秒，请耐心等待。</span>
         </div>
       </div>
 
@@ -179,30 +182,22 @@ async function diagnose() {
           </ul>
         </div>
 
-        <div v-if="diagnosis" class="form-card">
-          <h3 class="section-title">诊断报告</h3>
-          <p class="muted">{{ diagnosis.summary }}</p>
-          <div class="issue-list">
-            <article v-for="(issue, index) in diagnosis.issues" :key="index" class="issue-card">
-              <header class="issue-head">
-                <span class="badge">{{ issue.check_item }}</span>
-                <span class="priority" :class="`priority-${issue.priority}`">优先级：{{ PRIORITY_LABELS[issue.priority] || issue.priority }}</span>
-              </header>
-              <blockquote class="quote">原文：{{ issue.original_quote }}</blockquote>
-              <p class="issue-line"><strong>问题：</strong>{{ issue.problem }}</p>
-              <p class="issue-line"><strong>改写：</strong>{{ issue.rewrite }}</p>
-            </article>
+        <div class="form-card">
+          <h3 class="section-title">最近一次诊断</h3>
+          <template v-if="lastReport?.report">
+            <p class="muted">
+              目标岗位：{{ lastReport.targetRole || '未指定' }} · {{ formatTimestamp(lastReport.savedAt) }}
+            </p>
+            <p class="muted">
+              共 {{ lastReport.report.issues?.length || 0 }} 条问题、{{ lastReport.report.strengths?.length || 0 }} 条亮点。
+            </p>
+            <div class="panel-actions">
+              <button class="button" @click="router.push('/resume-report')">查看完整诊断报告</button>
+            </div>
+          </template>
+          <div v-else class="placeholder-block">
+            点击「开始诊断」后，会在新页面打开完整诊断报告（全部问题 + 优先级 + 原文证据 + 改写建议）
           </div>
-          <div>
-            <h4 class="sub-title">亮点</h4>
-            <ul class="plain-list">
-              <li v-for="item in diagnosis.strengths" :key="item">{{ item }}</li>
-            </ul>
-          </div>
-        </div>
-        <div v-else class="form-card">
-          <h3 class="section-title">诊断报告</h3>
-          <div class="placeholder-block">点击「开始诊断」后，在此展示问题清单 + 优先级 + 原文证据 + 改写示例</div>
         </div>
       </div>
     </div>
