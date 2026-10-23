@@ -12,8 +12,13 @@
 
 ```
 evaluation/
-├── README.md                     # 本文件：样本格式 + 回归口径 + 接口契约（唯一事实来源）
+├── README.md                     # 本文件：样本格式 + 回归口径 + 接口/实验契约（唯一事实来源）
 ├── run_eval.py                   # 回归评测脚本（mock 可无 Key 跑；real 模式对接 model_router）
+├── consistency_check.py          # 阶段 4：评分一致性抽样（10 条 × evaluation 路由 vs 人工分带）
+├── model_ab.py                   # 阶段 4：模型分配 A/B（现混合配置 vs 全 flash 基线）
+├── configs/
+│   └── models_all_flash.yaml     # A/B 用「评分路由全 flash」基线配置
+├── reports/                      # 阶段 4 实验报告（consistency.md / model_ab.md，由脚本生成）
 ├── prompt_baselines/             # Prompt 冻结基线快照（v_old）
 │   └── scoring_v1.md             # v1 评分 Prompt 冻结副本（勿改）
 ├── golden_qa/                    # 模块 D：面试 Q&A 黄金样本（JSONL，一行一个样本）
@@ -25,7 +30,7 @@ evaluation/
 │   ├── resume_autumn.jsonl
 │   └── resume_grad.jsonl
 ├── conftest.py                   # pytest 配置（sys.path + 工作区内 tmp_dir）
-└── test_*.py                     # 本目录 pytest（样本格式 / 回归阈值 / Prompt 契约 / 模块 D 服务）
+└── test_*.py                     # 本目录 pytest（样本格式 / 回归阈值 / Prompt 契约 / 模块 D / 实验脚本）
 ```
 
 **命名规则**：`golden_qa/qa_<scene>.jsonl`、`golden_resumes/resume_<scene>.jsonl`；
@@ -99,8 +104,8 @@ evaluation/
 
 ### 2.4 与 T2（resume-jd）素材的衔接
 
-- `golden_resumes/` 与 `data/resumes/` 可**同源**：当前本目录已自建 8 份虚构标注样本
-  （实习 3 / 秋招 3 / 保研 2），T2 产出 `data/resumes/` + `data/manifest.json` 后，把标注过的
+- `golden_resumes/` 与 `data/resumes/` 可**同源**：当前本目录已自建 20 份虚构标注样本
+  （实习 7 / 秋招 7 / 保研 6），T2 产出 `data/resumes/` + `data/manifest.json` 后，把标注过的
   样本复制进本目录并补齐 `annotations.expected_issues` 即可；**未标注意图的数据不能进入本目录**。
 - 若 T2 `data/manifest.json` 需要索引本目录，建议字段：
   `{id, file, scene, module, enabled, sha256}`；样本本体仍以本 README 的 JSONL 为准，
@@ -312,11 +317,62 @@ evaluation.export_markdown(report, "path/to/report.md")
 
 ## 6. 扩量计划与进度
 
-| 资产 | 当前（2026-10-23 · 阶段 4 第一批） | 阶段 4 目标 |
-| --- | --- | --- |
-| `golden_qa/` | **20 条**（实习 6 / 秋招 8 / 保研 6；每题三档锚定） | 30 条（实习/秋招/保研各约 10 条） |
-| `golden_resumes/` | **8 份**（实习 3 / 秋招 3 / 保研 2；每份 4–6 条标注问题） | 20 份（含输入 + 人工标注问题清单） |
+| 资产 | 当前（2026-10-23 · 阶段 4 收尾） | 阶段 4 目标 | 状态 |
+| --- | --- | --- | --- |
+| `golden_qa/` | **30 条**（实习 10 / 秋招 11 / 保研 9；每题三档锚定） | 30 条（实习/秋招/保研各约 10 条） | ✅ 达标 |
+| `golden_resumes/` | **20 份**（实习 7 / 秋招 7 / 保研 6；每份 4–6 条标注问题） | 20 份（含输入 + 人工标注问题清单） | ✅ 达标 |
 
-- 剩余扩量：QA +10（→30）、简历 +12（→20）；按 §2 格式追加 JSONL 即可，`run_eval.py` 自动发现，无需改代码。
+- 阶段 4 目标（30 QA / 20 简历）已达成；后续如继续扩充，按 §2 格式追加 JSONL 即可，
+  `run_eval.py` 自动发现，无需改代码。
 - 新增样本必须全虚构脱敏、人工标注分带/问题清单可核验；`pytest evaluation -q` 中的
   `test_golden_samples.py` 会校验计数、场景分布、分带冻结与 quote 逐字可核验。
+
+---
+
+## 7. 阶段 4 实验：评分一致性 + 模型分配 A/B（2026-10-23）
+
+> 当前为**临时全 DeepSeek 模式**（`MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml`，
+> evaluation=`deepseek-v4-pro` / cross_review=`deepseek-flash`）。以下真实结果仅代表该临时配置，
+> GLM Key 到位恢复决策④双供应商后须重跑。报告由脚本真实调用生成，未手工改数据。
+
+### 7.1 评分一致性抽样（`consistency_check.py`）
+
+- **口径**：从 `golden_qa/` 按场景均衡抽 10 条 `medium` 档，evaluation 路由评分 → 4 维均分 vs
+  人工分带中心 6.0；指标为平均相对偏差，阈值 **≤15%**（说明书 §9.4）。
+- **命令**：`python evaluation/consistency_check.py --live --limit 10 --workers 3`
+  （mock：`python evaluation/consistency_check.py`，无 Key 可用；mock 报告写
+  `reports/consistency_mock.md`，不会覆盖真实结果）
+- **退出码**：`0` 达标 / `1` 超标 / `2` 数据或调用错误。
+- **真实结果（10 次调用，v4-pro，temperature 0.1）**：平均相对偏差 **12.50% → 通过（≤15%）**；
+  最大单条偏差 29.17%；10 条中 6 条 ≤16.7%，2 条 0%。
+- **结论**：平均值达标，但尾部样本偏差偏大（最大 29%），说明 v2 Prompt 对"中等质量回答"的
+  区分度仍不稳定；建议扩大抽样并人工复核尾部样本。
+- 报告：[reports/consistency.md](reports/consistency.md)。
+
+### 7.2 模型分配 A/B（`model_ab.py` + `configs/models_all_flash.yaml`）
+
+- **样本**：`qa-intern-001`、`qa-autumn-001` 各三档 = 6 条目；两种配置各评一遍。
+- **配置**：A = 当前临时混合配置（evaluation=`deepseek-v4-pro`）；B = 全 flash 基线
+  （evaluation=`deepseek-flash`，其余 flash；cross_review 填 v4-pro 仅为通过决策④异模型校验，未调用）。
+- **命令**：`python evaluation/model_ab.py --live --sample-ids qa-intern-001,qa-autumn-001 --workers 3`
+  （mock：`python evaluation/model_ab.py`，mock 报告写 `reports/model_ab_mock.md`，不会覆盖真实结果）
+- **真实结果（12 次调用：6 v4-pro + 6 flash）**：
+
+| 指标 | A 质量档（v4-pro） | B 全 flash |
+| --- | --- | --- |
+| band_hit_rate（越高越好） | 1.000 | 1.000 |
+| MAE（越低越好） | **0.208** | 0.292 |
+| mean_score（观察项） | 5.792 | 5.708 |
+
+- **结论**：band_hit_rate 相同（子集内均命中分带）；质量档 MAE 更低（0.208 vs 0.292），
+  即分数偏离人工中心更小，但差异落在小样本噪声内，**不构成切换依据**。
+- **局限**：两配置均为同供应商（DeepSeek 临时模式），非决策④跨供应商混用；仅 2 条样本；
+  换模型须 GLM Key 到位后跑全量评测回归再定。
+- 报告：[reports/model_ab.md](reports/model_ab.md)。
+
+### 7.3 阶段 4 真实调用预算
+
+- 本轮真实调用合计 **23 次**（1 次 smoke + 10 次一致性 + 12 次 A/B），≤ 预算 30 次；
+  未跑 interview / report 真实链路。
+- 复现真实模式前确认 Key 有效并设置 `TMP/TEMP=AI-Interview-Assistant\.tmp`；报告为过程证据，
+  与 `prompts/`、`evaluation/` 一同纳入版本管理。

@@ -10,11 +10,11 @@ EVAL_DIR = Path(__file__).resolve().parent
 QA_DIR = EVAL_DIR / "golden_qa"
 RESUME_DIR = EVAL_DIR / "golden_resumes"
 
-# 阶段 4 第一批扩充后的规模与场景分布（20 条 QA / 8 份简历）
-QA_EXPECTED_COUNT = 20
-QA_EXPECTED_SCENES = {"intern": 6, "autumn": 8, "grad": 6}
-RESUME_EXPECTED_COUNT = 8
-RESUME_EXPECTED_SCENES = {"intern": 3, "autumn": 3, "grad": 2}
+# 阶段 4 收尾扩充后的规模与场景分布（30 条 QA / 20 份简历）
+QA_EXPECTED_COUNT = 30
+QA_EXPECTED_SCENES = {"intern": 10, "autumn": 11, "grad": 9}
+RESUME_EXPECTED_COUNT = 20
+RESUME_EXPECTED_SCENES = {"intern": 7, "autumn": 7, "grad": 6}
 
 QA_TIERS = ("poor", "medium", "good")
 QA_BANDS = {"poor": [1, 4], "medium": [5, 7], "good": [8, 10]}

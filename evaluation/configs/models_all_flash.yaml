@@ -1,0 +1,65 @@
+# ============================================================
+# 模型分配 A/B 基线配置（阶段 4 收尾 · task-11；仅供 evaluation/model_ab.py 使用）
+# ------------------------------------------------------------
+# 目的：与「当前临时混合配置」（backend/config/models.deepseek.yaml：
+#       evaluation = deepseek-v4-pro）对比「评分路由全 flash」基线的评分质量。
+#
+# 重要说明：
+#   1) 本 A/B **只使用 evaluation 路由**评分；A/B 不调用其它路由。
+#   2) 模型层强校验（决策④）要求 cross_review 与 evaluation 必须不同模型，
+#      因此 cross_review 填 deepseek-v4-pro 作为占位（本文件中唯一非 flash 路由）；
+#      它不参与 A/B，也不影响评分结果。
+#   3) 两套配置均为同一供应商（DeepSeek，临时联调模式），
+#      结论**不代表**决策④双供应商混用的效果；GLM Key 到位后需重跑。
+#   4) Key / Base URL 只走环境变量（变量名与 models.yaml 相同），禁止硬编码。
+# ============================================================
+
+resume_diagnosis:          # 不参与 A/B（占位）
+  model: deepseek-flash
+  temperature: 0.3
+  api_key_env: RESUME_DIAGNOSIS_API_KEY
+  base_url_env: RESUME_DIAGNOSIS_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+jd_matching:               # 不参与 A/B（占位）
+  model: deepseek-flash
+  temperature: 0.2
+  api_key_env: JD_MATCHING_API_KEY
+  base_url_env: JD_MATCHING_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+interview_agent:           # 不参与 A/B（占位）
+  model: deepseek-flash
+  temperature: 0.8
+  api_key_env: INTERVIEW_AGENT_API_KEY
+  base_url_env: INTERVIEW_AGENT_BASE_URL
+  timeout: 180
+  max_retries: 3
+  stream: true
+  context_window_tokens: 1048576
+
+evaluation:                # A/B 的被测路由：全 flash 基线（温度与现配置保持一致 0.1）
+  model: deepseek-flash
+  temperature: 0.1
+  api_key_env: EVALUATION_API_KEY
+  base_url_env: EVALUATION_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
+
+cross_review:              # 占位（A/B 不调用；为通过决策④异模型强校验必须 ≠ evaluation）
+  model: deepseek-v4-pro
+  temperature: 0.1
+  api_key_env: CROSS_REVIEW_API_KEY
+  base_url_env: CROSS_REVIEW_BASE_URL
+  timeout: 120
+  max_retries: 2
+  stream: false
+  context_window_tokens: 1048576
