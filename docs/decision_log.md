@@ -138,6 +138,16 @@
 - **评测集扩充第一批**：`evaluation/golden_qa` 10→**20 条**、`golden_resumes` 3→**8 份**（全虚构脱敏，测试与 mock 回归全绿：`pytest evaluation` 56 passed、`run_eval.py` mock PASS）。
 - **遗留**：① 仍为临时全 DeepSeek 模式，恢复决策④双供应商需 GLM Key + 全量真实回归；② JD 匹配雷达图（加分项）未做；③ 阶段 4 目标 20 简历 / 30 QA 尚未补齐。
 
+## 2026-10-23 · 阶段 4 收尾 + 阶段 5 交付完成（临时全 DeepSeek 模式）
+
+- **评测集达标**：`golden_resumes` 20 份、`golden_qa` 30 条（三场景、三档锚定、全虚构脱敏）；`evaluation/README.md` 计数与测试同步。
+- **评分一致性抽样**（真实调用 10 条 medium）：平均相对偏差 **12.50%（≤15% PASS）**，最大 29.17%（个体波动，如实记录）→ `evaluation/reports/consistency.md`。
+- **模型分配 A/B**（真实调用 12 次，2 条 × 三档 × 2 配置）：`band_hit_rate` 均 1.000；MAE 混合配置 0.208 < 全 flash 0.292；小样本 + 临时同供应商，**不构成切换依据**，待 GLM Key 后按决策④跑全量 → `evaluation/reports/model_ab.md`。
+- **阶段 5 交付**：`docs/final_report.md`（项目报告）；`scripts/run_demo.ps1` 一键单进程演示、`scripts/deploy_check.py` 部署自检、`docs/deployment.md`；`data/demo/demo-script.md` v2（3/8 分钟演示）与 `docs/report_sections/demo_faq.md`（15 条答辩 FAQ）；`docs/report_sections/prompt_methodology.md`（Prompt 方法论）。
+- **加分项**：JD 匹配页 SVG 5 维雷达图（无新依赖，真实/mock 双模式可用）。
+- **验证**：全仓 **314 passed + 1 skipped + 80 subtests**；`run_eval.py` mock PASS；`deploy_check.py` 正常 13 PASS/2 WARN、无 Key 场景 5 FAIL 且不泄露 Key；前端真实模式构建 exit 0。
+- **遗留（外部事项）**：邀请 3–5 名同学试用、演示视频录制、在线部署；Prompt v2 仍为临时提交口径，待恢复决策④后跑全量真实回归再固化。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |

@@ -16,6 +16,8 @@
 | [docs/decision_log.md](docs/decision_log.md) | 关键决策记录（含“为什么不上微调”、决策④“每模块独立模型”）    |
 | [docs/api.md](docs/api.md)            | **已冻结**的后端 HTTP 契约（15 条接口 + 统一响应壳 + 错误码） |
 | [docs/architecture.md](docs/architecture.md) | 四层架构、端到端数据流与“模块→模型”路由图 |
+| [docs/final_report.md](docs/final_report.md) | **项目报告**（测试 / 实验 / 交付物索引 / 快速开始） |
+| [docs/deployment.md](docs/deployment.md) | 部署与单进程演示指南（含一键脚本说明） |
 
 ## 功能模块
 
@@ -66,22 +68,23 @@
 │   ├── schemas/             # ⭐ 三个核心 JSON Schema（Pydantic）
 │   └── utils/               # 脱敏 mask / token 计数
 ├── prompts/                 # ⭐⭐ 核心资产一：10 个 Prompt（版本注释 + git 管理）
-├── evaluation/              # ⭐⭐ 核心资产二：金标准样本 + run_eval.py 强制回归关卡
+├── evaluation/              # ⭐⭐ 核心资产二：金标准（20 简历 / 30 Q&A）+ run_eval 强制回归 + 阶段4实验
 ├── data/                    # 素材库（LLM 虚构样例）：resumes / jds / questions / demo
-├── frontend/                # 交互层：Vue 3 + Vite 五页 + 真实后端联调（可 mock / 单进程托管）
-├── tests/                   # 301 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
-└── docs/                    # api.md（契约冻结）/ architecture.md / decision_log.md
+├── frontend/                # 交互层：Vue 3 + Vite 五页 + 真实后端联调（可 mock / 单进程托管 / 雷达图）
+├── scripts/                 # 冒烟 / 真实 E2E / 部署自检 / 一键演示 脚本
+├── tests/                   # 314 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
+└── docs/                    # api.md / architecture.md / decision_log.md / deployment.md / final_report.md
 ```
 
-## 当前进度（2026-10-23 · 阶段 1 + 阶段 3 完成）
+## 当前进度（2026-10-23 · 阶段 1/3/4/5 交付完成，临时全 DeepSeek 模式）
 
 **已完成**
 - 公共底座：`model_router`（5 路由 / 重试 / 超时 / 流式 / JSON 修复）、`token_counter`、`context_manager`、PDF/DOCX 解析、FastAPI 四组路由（统一响应壳 + 错误码）。
 - 四模块服务首版：A 简历诊断（结构化抽取 + 诊断）、B JD 匹配（两段式）、C 模拟面试（三场景 + 追问决策树 + 会话状态 + 流式）、D 评分 / 交叉复核 / 报告。
 - Prompt v2：A/B/C/D 全部模块 + 三场景变体（10 个文件，全部带版本注释）。
-- 评测：`evaluation/` 金标准样本（**8 份简历 + 20 条 Q&A**，第一批已扩充）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）。
+- 评测：`evaluation/` 金标准样本（**20 份简历 + 30 条 Q&A**）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）+ 评分一致性抽样 / 模型分配 A/B 实验脚本。
 - 前端：Vue 3 + Vite 五页 + 真实后端联调（SSE 增量渲染 / 加载错误态 / localStorage 历史）；真实模式构建通过，可 mock / 单进程托管。
-- 测试与契约：`docs/api.md` 契约冻结；全仓 **301 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路另测（见下）。
+- 测试与契约：`docs/api.md` 契约冻结；全仓 **314 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路另测（见下）。
 
 **真实联调已验证（2026-10-23 · 临时全 DeepSeek 模式）**
 - `scripts/smoke_deepseek.py`：模块 A 真实诊断/结构化 + cross_review 真实调用全部通过（exit=0）；
@@ -92,12 +95,17 @@
 - 前端已切真实后端（`VITE_USE_MOCK=false`）：五页全流程 + SSE 增量渲染 + 加载/错误/取消态 + localStorage 历史；真实模式构建 exit 0（37 modules，产物无 mock 残留）。
 - 后端单进程演示：`frontend/dist` 存在时 FastAPI 托管 `/` 与 SPA 回退、`/assets/*`；`/api` 契约不变；CORS（5173）预检通过。
 - 真实端到端验收 `scripts/e2e_real.py --with-report`：**13/13 通过**（真实模型链路含报告/Markdown，约 5.6 min）。
-- 阶段 4 第一批：golden_qa **20 条**、golden_resumes **8 份**（目标 30 / 20）。
+- 阶段 4 第一批：golden_qa **20 条**、golden_resumes **8 份**。
+
+**阶段 4 收尾 + 阶段 5 交付（2026-10-23，已完成）**
+- 评测集达标：golden_resumes **20 份**、golden_qa **30 条**（三场景、三档锚定、全虚构脱敏）。
+- 评分一致性抽样（真实模型）：10 条 medium，平均相对偏差 **12.50%（≤15% PASS）**，最大 29.17%；报告 `evaluation/reports/consistency.md`。
+- 模型分配 A/B（真实模型，小样本）：`band_hit_rate` 均 1.000，MAE 混合配置 0.208 < 全 flash 0.292（小样本噪声、不切换）；报告 `evaluation/reports/model_ab.md`。
+- 阶段 5 交付：`docs/final_report.md`（项目报告）、`docs/deployment.md` + `scripts/run_demo.ps1`（一键单进程演示）、`scripts/deploy_check.py`（部署自检）、`data/demo/demo-script.md`（3/8 分钟演示脚本）、答辩 FAQ；JD 匹配页新增 **SVG 5 维雷达图**。
 
 **待完成**
-- 恢复双供应商混用：补 GLM Key 后删除 `.env` 的 `MODELS_CONFIG_PATH` 切回 `models.yaml`（决策④），并按铁律跑全量真实评测回归；
-- 阶段 4 剩余：golden_resumes 8→20、golden_qa 20→30；评分一致性抽样验证、模型分配 A/B；
-- 阶段 5：演示视频/现场 demo 脚本、部署/打包、项目报告材料。
+- 恢复双供应商混用：补 GLM Key 后删除 `.env` 的 `MODELS_CONFIG_PATH` 切回 `models.yaml`（决策④），并按铁律跑全量真实评测回归（当前 v2 为临时提交口径）；
+- 外部事项：邀请 3–5 名同学试用、演示视频录制、在线部署（本地单进程部署已就绪）。
 
 ## 快速开始
 
@@ -146,9 +154,12 @@ pnpm dev          # 默认 mock 数据层；本地 .env 可设 VITE_USE_MOCK=fal
 pnpm build        # 产物在 frontend/dist（已被 .gitignore 忽略）
 ```
 
-**单进程演示**（前端构建后由 FastAPI 同时托管页面与 `/api`）：
+**单进程演示**（推荐一键脚本；或手动构建后用 FastAPI 同时托管页面与 `/api`）：
 
-```bash
+```powershell
+.\scripts\run_demo.ps1            # 自动检查环境 + 构建前端（如需）+ 启动 uvicorn
+
+# 或手动：
 cd frontend && pnpm build && cd ..
 .\.venv\Scripts\python.exe -m uvicorn backend.main:app --port 8000
 # 打开 http://127.0.0.1:8000 （SPA 页面 + API 同端口）
