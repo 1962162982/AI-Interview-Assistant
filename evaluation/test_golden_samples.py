@@ -2,12 +2,19 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 EVAL_DIR = Path(__file__).resolve().parent
 QA_DIR = EVAL_DIR / "golden_qa"
 RESUME_DIR = EVAL_DIR / "golden_resumes"
+
+# 阶段 4 第一批扩充后的规模与场景分布（20 条 QA / 8 份简历）
+QA_EXPECTED_COUNT = 20
+QA_EXPECTED_SCENES = {"intern": 6, "autumn": 8, "grad": 6}
+RESUME_EXPECTED_COUNT = 8
+RESUME_EXPECTED_SCENES = {"intern": 3, "autumn": 3, "grad": 2}
 
 QA_TIERS = ("poor", "medium", "good")
 QA_BANDS = {"poor": [1, 4], "medium": [5, 7], "good": [8, 10]}
@@ -33,8 +40,10 @@ def _load_jsonl(directory: Path) -> list[dict[str, Any]]:
 
 def test_qa_samples_count_scenes_and_unique_ids():
     samples = _load_jsonl(QA_DIR)
-    assert len(samples) == 10, "起步 QA 样本应为 10 条（实习/秋招/保研三场景）"
-    assert {sample["scene"] for sample in samples} == {"intern", "autumn", "grad"}
+    assert len(samples) == QA_EXPECTED_COUNT, (
+        f"阶段 4 第一批 QA 样本应为 {QA_EXPECTED_COUNT} 条（当前 {len(samples)} 条）"
+    )
+    assert dict(Counter(sample["scene"] for sample in samples)) == QA_EXPECTED_SCENES
     ids = [sample["id"] for sample in samples]
     assert len(ids) == len(set(ids)), "样本 id 必须全局唯一"
 
@@ -73,7 +82,10 @@ def test_qa_anchor_answers_are_distinguishable():
 
 def test_resume_samples_count_and_annotations():
     samples = _load_jsonl(RESUME_DIR)
-    assert len(samples) == 3, "起步简历样本应为 3 份（实习/秋招/保研各 1）"
+    assert len(samples) == RESUME_EXPECTED_COUNT, (
+        f"阶段 4 第一批简历样本应为 {RESUME_EXPECTED_COUNT} 份（当前 {len(samples)} 份）"
+    )
+    assert dict(Counter(sample["scene"] for sample in samples)) == RESUME_EXPECTED_SCENES
     ids = [sample["id"] for sample in samples]
     assert len(ids) == len(set(ids))
     for sample in samples:
@@ -85,7 +97,7 @@ def test_resume_samples_count_and_annotations():
         assert isinstance(prompt_input["resume_text"], str) and len(prompt_input["resume_text"]) > 100
         assert prompt_input.get("target_role")
         issues = sample["annotations"]["expected_issues"]
-        assert len(issues) >= 3, f"{sample['id']} 至少标注 3 条问题"
+        assert 4 <= len(issues) <= 6, f"{sample['id']} 应标注 4–6 条问题，实际 {len(issues)} 条"
         for issue in issues:
             assert issue["category"] in RESUME_CATEGORIES
             assert issue["severity"] in SEVERITIES

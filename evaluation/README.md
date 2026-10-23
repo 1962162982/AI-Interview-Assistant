@@ -99,9 +99,9 @@ evaluation/
 
 ### 2.4 与 T2（resume-jd）素材的衔接
 
-- `golden_resumes/` 与 `data/resumes/` 可**同源**：一期自建 3 份起步样本，T2 产出
-  `data/resumes/` + `data/manifest.json` 后，把标注过的样本复制进本目录并补齐
-  `annotations.expected_issues` 即可；**未标注意图的数据不能进入本目录**。
+- `golden_resumes/` 与 `data/resumes/` 可**同源**：当前本目录已自建 8 份虚构标注样本
+  （实习 3 / 秋招 3 / 保研 2），T2 产出 `data/resumes/` + `data/manifest.json` 后，把标注过的
+  样本复制进本目录并补齐 `annotations.expected_issues` 即可；**未标注意图的数据不能进入本目录**。
 - 若 T2 `data/manifest.json` 需要索引本目录，建议字段：
   `{id, file, scene, module, enabled, sha256}`；样本本体仍以本 README 的 JSONL 为准，
   manifest 只做索引，不复制字段语义。
@@ -310,11 +310,13 @@ evaluation.export_markdown(report, "path/to/report.md")
 
 ---
 
-## 6. 扩量计划
+## 6. 扩量计划与进度
 
-| 资产 | 起步（本轮） | 阶段 4 目标 |
+| 资产 | 当前（2026-10-23 · 阶段 4 第一批） | 阶段 4 目标 |
 | --- | --- | --- |
-| `golden_qa/` | 10 条（每题三档锚定） | 30 条（实习/秋招/保研各约 10 条） |
-| `golden_resumes/` | 3 份（每份 4–6 条标注问题） | 20 份（含输入 + 人工标注问题清单） |
+| `golden_qa/` | **20 条**（实习 6 / 秋招 8 / 保研 6；每题三档锚定） | 30 条（实习/秋招/保研各约 10 条） |
+| `golden_resumes/` | **8 份**（实习 3 / 秋招 3 / 保研 2；每份 4–6 条标注问题） | 20 份（含输入 + 人工标注问题清单） |
 
-新增样本只需按 §2 格式追加 JSONL 行；`run_eval.py` 自动发现，无需改代码。
+- 剩余扩量：QA +10（→30）、简历 +12（→20）；按 §2 格式追加 JSONL 即可，`run_eval.py` 自动发现，无需改代码。
+- 新增样本必须全虚构脱敏、人工标注分带/问题清单可核验；`pytest evaluation -q` 中的
+  `test_golden_samples.py` 会校验计数、场景分布、分带冻结与 quote 逐字可核验。

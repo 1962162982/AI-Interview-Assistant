@@ -42,7 +42,7 @@ def _write_jsonl(directory: Path, samples: list[dict]) -> Path:
 # ---------------------------------------------------------------------------
 def test_load_default_samples():
     samples = run_eval.load_qa_samples()
-    assert len(samples) == 10
+    assert len(samples) == 20  # 阶段 4 第一批：10 → 20
     assert all(sample["module"] == "evaluation" for sample in samples)
     assert all(sample["enabled"] is True for sample in samples)
 
@@ -186,7 +186,7 @@ def test_json_report_written(tmp_dir: Path):
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert report["mode"] == "mock"
     assert report["decision"]["passed"] is True
-    assert report["old"]["n_items"] == 30
+    assert report["old"]["n_items"] == 60  # 20 条样本 × 3 档
     assert report["new"]["band_hit_rate"] >= report["old"]["band_hit_rate"]
     assert report["new"]["mae"] <= report["old"]["mae"]
 
