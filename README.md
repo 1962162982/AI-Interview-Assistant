@@ -41,6 +41,11 @@
 > 配置唯一事实来源：`backend/config/models.yaml`；完整理由见 [docs/decision_log.md](docs/decision_log.md) 决策④。
 > 更换任一模块的模型/供应商属于效果变更 → 必须先跑评测集、分数不降才允许切换。
 
+> **临时联调模式（2026-10-23，用户指示：先全 DeepSeek，跑通后再混用）**：本机 `.env` 通过
+> `MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml` 临时把 5 个路由全部指向 DeepSeek
+> （`deepseek-v4-pro` / `deepseek-flash`，评分与复核仍异模型）；删除该变量即恢复上表决策④配置。
+> 详见 [docs/decision_log.md](docs/decision_log.md)。
+
 ## 目录结构
 
 ```
@@ -64,7 +69,7 @@
 ├── evaluation/              # ⭐⭐ 核心资产二：金标准样本 + run_eval.py 强制回归关卡
 ├── data/                    # 素材库（LLM 虚构样例）：resumes / jds / questions / demo
 ├── frontend/                # 交互层：Vue 3 + Vite 五页骨架 + API 层（可切 mock）
-├── tests/                   # 274 passed + 80 subtests（全 mock，不需要真实 Key）
+├── tests/                   # 279 passed + 1 skipped + 80 subtests（全 mock；真实链路另测）
 └── docs/                    # api.md（契约冻结）/ architecture.md / decision_log.md
 ```
 
@@ -76,11 +81,16 @@
 - Prompt v2：A/B/C/D 全部模块 + 三场景变体（10 个文件，全部带版本注释）。
 - 评测：`evaluation/` 金标准样本（3 份简历 + 10 条 Q&A）+ `run_eval.py` 强制回归（v_old vs v_new，分数下降非零退出）。
 - 前端：Vue 3 + Vite 五页骨架 + `src/api/client.js`（按冻结契约，可切真实后端 / mock）；`vite build` 已验证通过。
-- 测试与契约：`docs/api.md` 契约冻结；全仓 **274 passed + 80 subtests**（全 mock，无需真实 Key）。
+- 测试与契约：`docs/api.md` 契约冻结；全仓 **279 passed + 1 skipped + 80 subtests**（全 mock，无需真实 Key）；真实链路已另测（见下）。
+
+**真实联调已验证（2026-10-23 · 临时全 DeepSeek 模式）**
+- `scripts/smoke_deepseek.py`：模块 A 真实诊断/结构化 + cross_review 真实调用全部通过（exit=0）；
+- API 全链路真实调用 200：结构抽取 → 诊断 → JD 提取/匹配 → 模拟面试（含 SSE 流式）→ 报告生成/查询/Markdown，单次 E2E 约 252s；
+- Prompt 真实回归：`evaluation/run_eval.py --real` 子集运行，结果记录于 `docs/decision_log.md`（全量待跑）。
 
 **待完成**
-- 真实模型联调：当前 DeepSeek Key 无效、GLM Key 未配置，验证全部走 mock；换有效 Key 后需做一次端到端实测与 Prompt 真实评测回归。
-- 阶段 2/3：体验打磨（真流式、历史记录）、评测集扩展（20 简历 / 30 Q&A）、部署与演示脚本。
+- 恢复双供应商混用：补 GLM Key 后删除 `.env` 的 `MODELS_CONFIG_PATH` 切回 `models.yaml`（决策④），并按铁律跑全量真实评测回归；
+- 阶段 2/3：真流式/历史记录体验、评测集扩展（20 简历 / 30 条 Q&A）、部署与演示脚本。
 
 ## 快速开始
 
@@ -109,8 +119,8 @@ Copy-Item .env.example .env      # Windows PowerShell；Linux/macOS 用 cp
 # 退出码：0=全部通过；2=Key 缺失/鉴权失败；1=其他失败（网络/JSON 校验等）
 ```
 
-> 注：`evaluation/run_eval.py --real` 还需要 GLM 评分 Key（`EVALUATION_API_KEY`，路由 evaluation = glm-4-plus），
-> 与冒烟脚本（只需 DeepSeek Key）不同。
+> 注：临时全 DeepSeek 模式下 `evaluation/run_eval.py --real` 也用 DeepSeek Key 即可跑；
+> 恢复双供应商混用后才需要 GLM 评分 Key（`EVALUATION_API_KEY`，路由 evaluation = glm-4-plus）。
 
 前端（需 Node.js 18+；或使用演示机预构建）：
 

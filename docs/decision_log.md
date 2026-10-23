@@ -105,6 +105,26 @@
 - **Key 状态（截至 2026-10-23）**：用户提供的 DeepSeek Key（脱敏尾号 `****509d`）对 `https://api.deepseek.com` 实测 **401 invalid**；GLM Key 未配置。模块 A 与 `cross_review` 的真实链路验收、以及完整四模块真实链路与真实评测回归，均**阻塞于有效 Key**；已备 `scripts/smoke_deepseek.py`（模块 A + cross_review，退出码 0/2/1），换 Key 后一条命令即可验收。
 - **安全与合规**：所有 Key 仅存本地 `.env`（`.gitignore` 保护），已用 `git log -S` 核验未进入任何提交；所有改动均限 `AI-Interview-Assistant/` 仓库内。
 
+## 2026-10-23 · 临时联调模式：全部模块先走 DeepSeek（用户指示）
+
+- **用户指示**：“暂时都使用 DEEPSEEK，等模型跑通，再混用两个模型。”
+- **实现方式（不破坏决策④）**：
+  - 新增 `backend/config/models.deepseek.yaml`（5 路由全 DeepSeek 的临时配置）；
+  - `model_router` 支持环境变量 `MODELS_CONFIG_PATH`：设置后加载临时配置，未设置时仍加载默认 `backend/config/models.yaml`（决策④ 双供应商）；相对路径按仓库根解析；
+  - 本机 `.env` 设置 `MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml`（`.env` 不入库），并把 5 组模块 Key / Base URL 全部指向 `https://api.deepseek.com`。
+- **临时模型映射**（该端点当前仅支持两个模型）：
+
+| 路由 | 临时模型 | 说明 |
+| --- | --- | --- |
+| A `resume_diagnosis` | `deepseek-v4-pro` | 质量档（诊断 / 结构化） |
+| B `jd_matching` | `deepseek-flash` | 速度档（两段式抽取 + 匹配） |
+| C `interview_agent` | `deepseek-flash` | 速度档（长对话 + 流式） |
+| D `evaluation` | `deepseek-v4-pro` | 质量档（评分一致性优先） |
+| D `cross_review` | `deepseek-flash` | 与 evaluation **不同模型**（保留决策④异模型原则，但同供应商属临时） |
+
+- **恢复方式**：删除 / 注释 `.env` 中 `MODELS_CONFIG_PATH` 即回到决策④配置；恢复前需补齐 GLM Key，并按铁律先跑真实评测回归（分数不降才切换）。
+- **约束**：本模式仅用于“先跑通模型链路”的联调；`models.yaml`（决策④）保持不变，不得把临时映射写进 README 的模型策略表或结题结论。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |
