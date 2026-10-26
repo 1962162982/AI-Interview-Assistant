@@ -168,6 +168,10 @@ class RouteConfig:
     max_retries: int
     stream: bool
     context_window_tokens: int
+    #: 路由级默认输出上限（调用方显式 max_tokens 可覆盖；None 表示不限制）
+    max_tokens: int | None = None
+    #: 路由级附加请求参数（原样透传给 OpenAI 兼容接口，如 thinking / effort）
+    extra: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -314,6 +318,19 @@ def _build_route_config(name: str, raw: Mapping[str, Any]) -> RouteConfig:
         raise RouterConfigError(f"路由 {name!r} 的 context_window_tokens 必须大于 0")
     api_key_env = str(raw.get("api_key_env") or f"{name.upper()}_API_KEY").strip()
     base_url_env = str(raw.get("base_url_env") or f"{name.upper()}_BASE_URL").strip()
+    raw_extra = raw.get("extra")
+    if raw_extra is None:
+        extra: dict[str, Any] = {}
+    elif isinstance(raw_extra, Mapping):
+        extra = dict(raw_extra)
+    else:
+        raise RouterConfigError(f"路由 {name!r} 的 extra 必须是对象（键值映射）")
+    raw_max_tokens = raw.get("max_tokens")
+    max_tokens: int | None = None
+    if raw_max_tokens is not None:
+        max_tokens = _as_int(raw_max_tokens, "max_tokens", name, 0)
+        if max_tokens <= 0:
+            raise RouterConfigError(f"路由 {name!r} 的 max_tokens 必须大于 0")
     return RouteConfig(
         name=name,
         model=model,
@@ -324,6 +341,8 @@ def _build_route_config(name: str, raw: Mapping[str, Any]) -> RouteConfig:
         max_retries=max_retries,
         stream=bool(raw.get("stream", False)),
         context_window_tokens=context_window,
+        max_tokens=max_tokens,
+        extra=extra,
     )
 
 
@@ -546,14 +565,23 @@ class ModelRouter:
         }
         effective_temperature = config.temperature if temperature is None else float(temperature)
         kwargs["temperature"] = effective_temperature
-        if max_tokens is not None:
-            kwargs["max_tokens"] = int(max_tokens)
+        effective_max_tokens = config.max_tokens if max_tokens is None else int(max_tokens)
+        if effective_max_tokens is not None:
+            kwargs["max_tokens"] = int(effective_max_tokens)
         if response_format is not None:
             kwargs["response_format"] = dict(response_format)
         if stream:
             kwargs["stream"] = True
+        merged_extra: dict[str, Any] = dict(config.extra or {})
         if extra:
-            kwargs.update(dict(extra))
+            merged_extra.update(dict(extra))
+        if merged_extra:
+            # 供应商扩展参数（如 thinking / effort / top_p 等）统一通过 OpenAI SDK 的
+            # extra_body 透传；SDK 的 create() 不接受未知顶层关键字。
+            existing_body = kwargs.get("extra_body")
+            body: dict[str, Any] = dict(existing_body) if isinstance(existing_body, Mapping) else {}
+            body.update(merged_extra)
+            kwargs["extra_body"] = body
         return kwargs
 
     def _request_with_retry(self, config: RouteConfig, call: Callable[[], Any]) -> Any:
@@ -608,7 +636,17 @@ class ModelRouter:
         response = self._request_with_retry(
             config, lambda: client.chat.completions.create(**kwargs)
         )
-        return self._to_chat_result(route, config, response)
+        result = self._to_chat_result(route, config, response)
+        # token 用量日志（不包含 Key / 提示词正文），便于观察成本
+        logger.info(
+            "模型调用 route=%s model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            route,
+            result.model,
+            result.usage.prompt_tokens,
+            result.usage.completion_tokens,
+            result.usage.total_tokens,
+        )
+        return result
 
     def chat_stream(
         self,

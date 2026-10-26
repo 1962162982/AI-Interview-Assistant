@@ -29,6 +29,15 @@ from .services.model_router import load_env_file
 
 logger = logging.getLogger(__name__)
 
+# 统一日志级别：让 model_router 的 token 用量日志（INFO）在 uvicorn 下可见；
+# 日志只记录路由 / 模型 / token 数，不包含 Key 或提示词正文。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
+
 # 加载项目根目录 .env（仅读取，不覆盖已存在环境变量；Key 不打印、不落日志）
 load_env_file()
 

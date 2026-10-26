@@ -148,6 +148,24 @@
 - **验证**：全仓 **314 passed + 1 skipped + 80 subtests**；`run_eval.py` mock PASS；`deploy_check.py` 正常 13 PASS/2 WARN、无 Key 场景 5 FAIL 且不泄露 Key；前端真实模式构建 exit 0。
 - **遗留（外部事项）**：邀请 3–5 名同学试用、演示视频录制、在线部署；Prompt v2 仍为临时提交口径，待恢复决策④后跑全量真实回归再固化。
 
+## 2026-10-26 · 成本优化：关闭 DeepSeek 深度思考 + 路由级输出上限
+
+- **背景**：用户反馈 token 消耗过快。排查发现 `https://api.deepseek.com` 的 `deepseek-flash` / `deepseek-v4-pro`
+  默认开启「深度思考」（响应含 `reasoning_content`，reasoning tokens 计入 completion）。同一条短请求：
+  默认 118 tokens，关闭思考后 42 tokens；`deepseek-v4-pro` 默认甚至可能把 max_tokens 全部用于 reasoning、正文为空。
+- **改动**：
+  - `model_router`：路由配置新增 `max_tokens`（默认输出上限）与 `extra`（经 OpenAI SDK `extra_body` 透传的供应商扩展参数）；
+    每次非流式调用打印 token 用量 INFO 日志（只含路由 / 模型 / token 数，不含 Key 或提示词正文）。
+  - `backend/config/models.deepseek.yaml`：五个路由统一 `extra.thinking.type=disabled`，并设置输出上限
+    （A/D 2400、B 2200、C 800、cross_review 1600）。
+  - `backend/main.py`：统一日志级别，便于观察 `prompt / completion / total tokens`。
+- **实测**（临时全 DeepSeek）：同一份示例简历诊断 75.7s → **12.4s**；`resume_diagnosis` 单次
+  `prompt=2069 / completion=1050 / total=3119`（无 reasoning 计费）；`interview_agent` 建会话
+  `prompt=2291 / completion=29 / total=2320`。
+- **代价与切换**：关闭思考可能影响复杂推理任务（诊断 / 评分）的质量；如质量优先，可删除对应路由的
+  `extra.thinking`（恢复默认思考），但 token 与耗时将显著上升，且按铁律需先跑评测回归。
+- **影响范围**：仅临时全 DeepSeek 配置；决策④的 `models.yaml` 未改；恢复双供应商时需重新评估。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |

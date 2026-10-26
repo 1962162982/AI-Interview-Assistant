@@ -48,6 +48,10 @@
 > `MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml` 临时把 5 个路由全部指向 DeepSeek
 > （`deepseek-v4-pro` / `deepseek-flash`，评分与复核仍异模型）；删除该变量即恢复上表决策④配置。
 > 详见 [docs/decision_log.md](docs/decision_log.md)。
+>
+> **成本控制（2026-10-26）**：该端点默认开启「深度思考」，会消耗大量 reasoning tokens；临时全 DeepSeek 配置
+> 已统一关闭思考（`extra.thinking.type=disabled`）并设置每路由 `max_tokens` 上限。后端日志会打印每次调用的
+> `prompt / completion / total tokens`；如需质量优先，可在 `backend/config/models.deepseek.yaml` 调整。
 
 ## 目录结构
 

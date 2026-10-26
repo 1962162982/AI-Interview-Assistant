@@ -1,7 +1,7 @@
 # ============================================================
 # 临时联调路由配置（2026-10-23，用户指示：“暂时都使用 DeepSeek，等模型跑通后再混用两个模型”）
 # ------------------------------------------------------------
-# 启用方式：在本地 .env 中设置
+# 启用方式：在本地 .env / 云端环境变量中设置
 #   MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml
 # 删除 / 注释该变量即自动恢复 backend/config/models.yaml（决策④ 双供应商混用）。
 #
@@ -9,12 +9,18 @@
 #   1) 该端点（https://api.deepseek.com）当前支持两个模型：
 #      - deepseek-v4-pro ：质量档（A 简历诊断 / D 评分）
 #      - deepseek-flash  ：速度档（B JD 匹配 / C 模拟面试 / D 交叉复核）
-#      评分（evaluation）与复核（cross_review）仍使用**不同模型**（pro vs flash），
-#      保留决策④“评分与复核异模型”的原则；但当前为同一供应商，属于临时模式。
-#   2) 本文件仅用于联调，不改动决策④的 models.yaml；模型跑通、GLM Key 到位后
+#      评分（evaluation）与复核（cross_review）仍使用**不同模型**，保留决策④异模型原则。
+#   2) 成本控制（2026-10-26）：该端点默认开启「深度思考 / reasoning」，会额外消耗大量
+#      reasoning tokens（实测同一短请求 118 → 关闭后 42 tokens，响应也更快）。
+#      因此这里统一设置：
+#        extra.thinking.type = disabled   # 关闭深度思考
+#        max_tokens: <每路由输出上限>      # 防止单次输出无限增长
+#      如需恢复思考模式做质量对比：删除某路由的 extra.thinking，或其 type 改为 enabled；
+#      改模型/参数属于效果变更，按铁律需先跑评测回归。
+#   3) 本文件仅用于联调，不改动决策④的 models.yaml；模型跑通、GLM Key 到位后
 #      需切回 models.yaml 并重跑评测回归（铁律）再固化。
-#   3) Key / Base URL 只走环境变量（变量名与 models.yaml 相同），禁止硬编码。
-#   4) context_window_tokens 取自该端点 /models 返回值（1M）。
+#   4) Key / Base URL 只走环境变量（变量名与 models.yaml 相同），禁止硬编码。
+#   5) context_window_tokens 取自该端点 /models 返回值（1M）。
 # ============================================================
 
 resume_diagnosis:          # 模块 A：简历诊断（质量档）
@@ -26,6 +32,10 @@ resume_diagnosis:          # 模块 A：简历诊断（质量档）
   max_retries: 2
   stream: false
   context_window_tokens: 1048576
+  max_tokens: 2400
+  extra:
+    thinking:
+      type: disabled
 
 jd_matching:               # 模块 B：JD 匹配（速度档）
   model: deepseek-flash
@@ -36,6 +46,10 @@ jd_matching:               # 模块 B：JD 匹配（速度档）
   max_retries: 2
   stream: false
   context_window_tokens: 1048576
+  max_tokens: 2200
+  extra:
+    thinking:
+      type: disabled
 
 interview_agent:           # 模块 C：模拟面试（速度档 + 流式）
   model: deepseek-flash
@@ -46,6 +60,10 @@ interview_agent:           # 模块 C：模拟面试（速度档 + 流式）
   max_retries: 3
   stream: true
   context_window_tokens: 1048576
+  max_tokens: 800
+  extra:
+    thinking:
+      type: disabled
 
 evaluation:                # 模块 D：即时反馈评分（质量档 + 极低温）
   model: deepseek-v4-pro
@@ -56,6 +74,10 @@ evaluation:                # 模块 D：即时反馈评分（质量档 + 极低�
   max_retries: 2
   stream: false
   context_window_tokens: 1048576
+  max_tokens: 2400
+  extra:
+    thinking:
+      type: disabled
 
 cross_review:              # 模块 D：交叉复核（与 evaluation 不同模型：flash vs pro）
   model: deepseek-flash
@@ -66,3 +88,7 @@ cross_review:              # 模块 D：交叉复核（与 evaluation 不同模�
   max_retries: 2
   stream: false
   context_window_tokens: 1048576
+  max_tokens: 1600
+  extra:
+    thinking:
+      type: disabled

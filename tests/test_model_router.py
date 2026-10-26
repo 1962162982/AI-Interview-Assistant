@@ -253,7 +253,8 @@ def test_chat_temperature_override_and_extra():
     call = client.chat.completions.calls[0]
     assert call["temperature"] == 0.5
     assert call["max_tokens"] == 128
-    assert call["stop"] == ["\n"]
+    # 供应商扩展参数统一通过 extra_body 透传（OpenAI SDK 不接受未知顶层关键字）
+    assert call["extra_body"] == {"stop": ["\n"]}
 
 
 def test_chat_empty_messages_rejected():
