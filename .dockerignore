@@ -1,0 +1,35 @@
+# ============================================================
+# Docker 构建上下文排除项（绝不把密钥 / 本地环境 / 构建缓存打进镜像）
+# ============================================================
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.tmp
+data-gym-cache
+*.log
+
+# 前端本地依赖与构建产物（镜像内会重新安装并构建）
+frontend/node_modules
+frontend/dist
+frontend/.pnpm-store
+frontend/.npm-cache
+frontend/.env
+frontend/.env.*
+
+# 不需要进入镜像的工程材料
+docs
+evaluation
+tests
+scripts
+STORY.md
+说明书.md
+实行清单.md
+指南.md
+README.md

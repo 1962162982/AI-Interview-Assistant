@@ -1,0 +1,40 @@
+# ============================================================
+# Render Blueprint：一键把本项目部署为公网网页（Docker 单服务）
+# 使用方式：Render Dashboard → New → Blueprint → 选择本仓库 → Apply
+# 注意：下方 sync: false 的变量会要求你在 Render 控制台填写（Secret），
+#       绝不把真实 Key 写进本文件 / 仓库。
+# ============================================================
+services:
+  - type: web
+    name: ai-interview-assistant
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # 临时全 DeepSeek 模式（详见 docs/deployment.md 第六节）
+      - key: MODELS_CONFIG_PATH
+        value: backend/config/models.deepseek.yaml
+
+      # 5 组模块 Key：部署时在 Render 控制台填写，不会进入代码仓库
+      - key: RESUME_DIAGNOSIS_API_KEY
+        sync: false
+      - key: RESUME_DIAGNOSIS_BASE_URL
+        value: https://api.deepseek.com
+      - key: JD_MATCHING_API_KEY
+        sync: false
+      - key: JD_MATCHING_BASE_URL
+        value: https://api.deepseek.com
+      - key: INTERVIEW_AGENT_API_KEY
+        sync: false
+      - key: INTERVIEW_AGENT_BASE_URL
+        value: https://api.deepseek.com
+      - key: EVALUATION_API_KEY
+        sync: false
+      - key: EVALUATION_BASE_URL
+        value: https://api.deepseek.com
+      - key: CROSS_REVIEW_API_KEY
+        sync: false
+      - key: CROSS_REVIEW_BASE_URL
+        value: https://api.deepseek.com

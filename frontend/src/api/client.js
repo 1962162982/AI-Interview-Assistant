@@ -14,7 +14,11 @@
  * 体验：所有请求支持超时（AbortController）与外部取消（signal）；SSE 支持中途停止。
  */
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:8000'
+// 后端基地址（不含 /api 前缀）：
+// - 本地开发（`pnpm dev`）：默认 http://127.0.0.1:8000；
+// - 生产构建（Docker/云端部署）：默认同源（空串），即请求相对路径 `/api/...`，
+//   由 FastAPI 单进程同时托管页面与 API；也可用 VITE_API_BASE_URL 显式覆盖。
+const DEFAULT_BASE_URL = import.meta.env.DEV ? 'http://127.0.0.1:8000' : ''
 const DEFAULT_TIMEOUT_MS = 90_000
 
 /** 后端基地址（不含 /api 前缀）：VITE_API_BASE_URL，默认本地 uvicorn */

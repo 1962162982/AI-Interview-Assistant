@@ -106,7 +106,64 @@ AI-Interview-Assistant\.venv\Scripts\python.exe -m uvicorn backend.main:app --ho
 3. 演示机只需 Python 与 `.venv` 依赖，运行 `scripts/run_demo.ps1 -SkipBuild` 或手动 uvicorn 即可。
    - `frontend/dist` 不存在时后端行为与阶段 1 一致：页面路径 404，但 `/api`、`/health`、`/docs` 仍可用（仅 API 模式）。
 
-## 六、部署前自检
+## 六、公开网页部署（Render / Railway / Hugging Face Spaces）
+
+目标：把项目部署成一个**可直接打开的公网网页**（前端页面 + `/api` 同一域名）。
+
+### 6.1 原理
+
+- 仓库已提供多阶段 `Dockerfile`：阶段 1 用 Node 构建 `frontend/dist`，阶段 2 用 Python 运行 FastAPI 并静态托管 dist
+  （单服务、单端口、同源，生产构建默认请求相对路径 `/api`，无需 CORS）。
+- 部署时**不要**提交 `.env`：在平台控制台把 5 组 Key 填成 Secret 环境变量。
+- 仓库内 `render.yaml` 是 Render Blueprint 模板；其中 Key 使用 `sync: false`，部署时由平台提示填写，不会进入代码仓库。
+- 默认 Docker 配置使用「临时全 DeepSeek 模式」（`MODELS_CONFIG_PATH=backend/config/models.deepseek.yaml`），
+  且已关闭深度思考并限制输出上限以控制成本（见 `backend/config/models.deepseek.yaml` 注释）。
+  若恢复决策④双供应商，在平台设置 `MODELS_CONFIG_PATH` 为空，并按 `.env.example` 填两套供应商 Key。
+
+### 6.2 通用步骤
+
+1. 注册平台账号（Render / Railway / Hugging Face 均可），并授权访问 GitHub 仓库；
+2. 新建 Web Service（Docker）或 Blueprint（Render 可自动读取仓库里的 `render.yaml`）；
+3. 在平台 Environment / Secrets 中填 5 组 Key（或临时全 DeepSeek：5 个变量都填同一个 DeepSeek Key）；
+4. 等待构建完成，访问平台分配的 HTTPS 域名；
+5. 健康检查：`https://<域名>/health` 返回 `{"status":"ok"}`。
+
+### 6.3 Render（推荐，免费档 + Blueprint）
+
+1. 登录 <https://render.com> → **New → Blueprint** → 选择本仓库；
+2. Render 自动识别 `render.yaml`，点击 **Apply**；
+3. 首次部署会提示填写 `sync: false` 的 5 个 Key（只填一次，保存为 Secret）；
+4. 构建完成后访问 `https://<service>.onrender.com`；
+5. 免费实例空闲会休眠，首次访问需要等待冷启动（构建 + 启动约数分钟）。
+
+### 6.4 Railway
+
+1. <https://railway.app> → **New Project → Deploy from GitHub repo**；
+2. 自动识别根目录 `Dockerfile` 并构建；
+3. 在 **Variables** 中填上述环境变量；
+4. **Settings → Networking → Generate Domain** 得到公网 HTTPS 地址。
+
+### 6.5 Hugging Face Spaces（Docker）
+
+1. 新建 **Space → SDK: Docker → Blank**；
+2. 上传/关联本仓库，确保根目录有 `Dockerfile`；
+3. 在 Space 设置里加环境变量 `PORT=7860` 和 5 组 Key；
+4. 公开访问 `https://<user>-<space>.hf.space`。
+
+### 6.6 安全与限制（务必先读）
+
+- **公网暴露 = 任何人可消耗你的 API Key**：请使用单独的、低额度、可随时吊销的演示 Key；
+  不要把主账号长期 Key 放到公开演示站。
+- 免费实例会休眠、冷启动慢；真实模型调用本身需要数秒到数十秒。
+- 面试会话 / 报告存在**进程内存**：重启、休眠唤醒、多实例都会丢失；演示时请连续操作。
+- 单实例运行即可，不要开多副本（内存态会话不共享）。
+- 如需限制滥用，可在反向代理层加访问口令 / 每小时请求上限，或仅在演示时段开放。
+- 平台环境变量是 Secret；**不要把 Key 写进仓库、Dockerfile、render.yaml**。
+
+> 仅想展示界面、不调用真实模型：可用 `VITE_USE_MOCK=true` 构建前端，再托管到 GitHub Pages / Vercel 等静态站
+> （无后端，AI 能力不可用，只适合看交互）。
+
+## 七、部署前自检
 
 ```powershell
 # 默认检查：Python/依赖、frontend/dist、根 .env、5 组 Key 是否已配置（不显示值）、模型路由配置
@@ -122,14 +179,14 @@ AI-Interview-Assistant\.venv\Scripts\python.exe scripts\deploy_check.py --env-fi
 - 输出为 PASS / WARN / FAIL 清单；存在 FAIL 时**退出码为 1**，全部通过（允许 WARN）为 **0**。
 - 自检只报告 Key「是否配置」，**绝不打印任何 Key 值**；同时校验 `evaluation` 与 `cross_review` 是否异模型（决策④）。
 
-## 七、端口与 CORS
+## 八、端口与 CORS
 
 - 单进程演示默认端口 `8000`（可用 `-Port` 或 uvicorn `--port` 修改）；
 - 前端开发服务器默认 `5173`，另预留 `3000`；
 - 跨域白名单通过 `CORS_ORIGINS` 覆盖，例如：`CORS_ORIGINS=http://127.0.0.1:5173,http://192.168.1.10:8000`；
 - 单进程部署时前端与 API 同源，浏览器不产生跨域请求；CORS 主要服务于「前端 dev server + 后端分开跑」的开发模式。
 
-## 八、常见问题（FAQ）
+## 九、常见问题（FAQ）
 
 1. **启动报「未找到 .venv」**：在项目根目录执行 `python -m venv .venv`，再
    `.venv\Scripts\python.exe -m pip install -r requirements.txt`。
