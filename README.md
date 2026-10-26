@@ -52,6 +52,10 @@
 > **成本控制（2026-10-26）**：该端点默认开启「深度思考」，会消耗大量 reasoning tokens；临时全 DeepSeek 配置
 > 已统一关闭思考（`extra.thinking.type=disabled`）并设置每路由 `max_tokens` 上限。后端日志会打印每次调用的
 > `prompt / completion / total tokens`；如需质量优先，可在 `backend/config/models.deepseek.yaml` 调整。
+>
+> **网页端思考开关（2026-10-26）**：页面顶栏新增「深度思考：开 / 关」开关（本机持久化），开启后前端请求会附带
+> `X-Thinking-Mode: enabled`，仅对**后续请求**生效；开启时更慢（单次可达数十秒到数分钟）、token 消耗更高，
+> 关闭则使用默认省 token 模式。开启后会自动为输出预留额外预算，避免 JSON 正文被 reasoning 挤掉。
 
 ## 目录结构
 

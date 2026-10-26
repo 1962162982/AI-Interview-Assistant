@@ -25,7 +25,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .api import api_router
 from .api.common import CODE_INTERNAL, CODE_INVALID_PARAM, STATUS_DEFAULT_CODE
-from .services.model_router import load_env_file
+from .services.model_router import (
+    load_env_file,
+    reset_thinking_override,
+    set_thinking_override,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +59,42 @@ def _cors_origins() -> list[str]:
     if not raw:
         return list(DEFAULT_CORS_ORIGINS)
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
+class ThinkingModeMiddleware:
+    """把请求头 ``X-Thinking-Mode`` 映射为「本次请求」的深度思考开关。
+
+    - ``enabled`` / ``on`` / ``true`` / ``1`` → 本次请求启用思考；
+    - ``disabled`` / ``off`` / ``false`` / ``0`` → 本次请求关闭思考；
+    - 缺省 / 无法识别 → 使用 ``models.deepseek.yaml`` 中路由默认值（当前默认关闭）。
+
+    使用纯 ASGI 中间件而非 BaseHTTPMiddleware，保证 ContextVar 能正确传递到
+    端点及其线程池调用链（模型路由读取该 ContextVar）。
+    """
+
+    def __init__(self, app) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        raw_value = ""
+        for key, value in scope.get("headers") or []:
+            if key.lower() == b"x-thinking-mode":
+                raw_value = value.decode("latin-1").strip().lower()
+                break
+        override: bool | None = None
+        if raw_value in {"enabled", "on", "true", "1"}:
+            override = True
+        elif raw_value in {"disabled", "off", "false", "0"}:
+            override = False
+        token = set_thinking_override(override) if override is not None else None
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            if token is not None:
+                reset_thinking_override(token)
 
 
 # ------------------------------------------------------------------ #
@@ -119,6 +159,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(ThinkingModeMiddleware)
 
 app.include_router(api_router)
 

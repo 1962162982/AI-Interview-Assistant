@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import re
+from contextvars import ContextVar
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -41,6 +42,31 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# 单次请求级别的「深度思考」覆盖：None=使用 models 配置默认；True/False=本次请求强制开/关。
+_thinking_override: ContextVar[bool | None] = ContextVar("thinking_override", default=None)
+
+# 开启深度思考时，在路由 max_tokens 基础上额外预留的输出预算（reasoning + 正文）。
+# 说明：该端点对 reasoning 的 budget 并不严格封顶（v4-pro 实测 reasoning 可达 5–7K tokens），
+# 因此预留较大空间，避免正文 / JSON 被 reasoning 挤掉。
+THINKING_TOKEN_RESERVE = 8000
+# 开启深度思考时的 reasoning 预算提示值（部分 flash 模型只有在给出 budget/effort 时才会真正思考）
+THINKING_BUDGET_TOKENS = 4096
+
+
+def set_thinking_override(enabled: bool | None):
+    """设置当前请求上下文的思考模式覆盖；返回 token 供 reset 使用。"""
+    return _thinking_override.set(enabled)
+
+
+def reset_thinking_override(token) -> None:
+    """恢复上一个思考模式覆盖（应在请求结束时调用）。"""
+    _thinking_override.reset(token)
+
+
+def get_thinking_override() -> bool | None:
+    """读取当前请求的思考模式覆盖。"""
+    return _thinking_override.get()
 
 # ---------------------------------------------------------------- #
 # 路径与默认值
@@ -181,6 +207,8 @@ class Usage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    #: 深度思考模式下的 reasoning tokens（供应商返回时才有）
+    reasoning_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -395,10 +423,19 @@ def load_route_configs(config_path: str | Path | None = None) -> dict[str, Route
 def _extract_usage(usage: Any) -> Usage:
     if usage is None:
         return Usage()
+    details = getattr(usage, "completion_tokens_details", None)
+    reasoning = 0
+    if details is not None:
+        value = details.get("reasoning_tokens") if isinstance(details, Mapping) else getattr(details, "reasoning_tokens", 0)
+        try:
+            reasoning = int(value or 0)
+        except (TypeError, ValueError):
+            reasoning = 0
     return Usage(
         prompt_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
         completion_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
         total_tokens=int(getattr(usage, "total_tokens", 0) or 0),
+        reasoning_tokens=reasoning,
     )
 
 
@@ -565,7 +602,12 @@ class ModelRouter:
         }
         effective_temperature = config.temperature if temperature is None else float(temperature)
         kwargs["temperature"] = effective_temperature
+        # 网页端「深度思考」开关（请求头 X-Thinking-Mode）优先于路由配置
+        override = _thinking_override.get()
         effective_max_tokens = config.max_tokens if max_tokens is None else int(max_tokens)
+        if override is True and effective_max_tokens is not None:
+            # 思考模式会消耗 reasoning tokens；预留额外输出预算，避免正文被截断
+            effective_max_tokens += THINKING_TOKEN_RESERVE
         if effective_max_tokens is not None:
             kwargs["max_tokens"] = int(effective_max_tokens)
         if response_format is not None:
@@ -575,6 +617,17 @@ class ModelRouter:
         merged_extra: dict[str, Any] = dict(config.extra or {})
         if extra:
             merged_extra.update(dict(extra))
+        if override is not None:
+            if override:
+                # 部分模型（如 deepseek-flash）仅设置 thinking.enabled 时不一定思考，
+                # 需要同时给出 budget_tokens / effort 才会真正产生 reasoning。
+                merged_extra["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": THINKING_BUDGET_TOKENS,
+                }
+                merged_extra.setdefault("effort", "high")
+            else:
+                merged_extra["thinking"] = {"type": "disabled"}
         if merged_extra:
             # 供应商扩展参数（如 thinking / effort / top_p 等）统一通过 OpenAI SDK 的
             # extra_body 透传；SDK 的 create() 不接受未知顶层关键字。
@@ -639,12 +692,13 @@ class ModelRouter:
         result = self._to_chat_result(route, config, response)
         # token 用量日志（不包含 Key / 提示词正文），便于观察成本
         logger.info(
-            "模型调用 route=%s model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s",
+            "模型调用 route=%s model=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s reasoning_tokens=%s",
             route,
             result.model,
             result.usage.prompt_tokens,
             result.usage.completion_tokens,
             result.usage.total_tokens,
+            result.usage.reasoning_tokens,
         )
         return result
 

@@ -166,6 +166,26 @@
   `extra.thinking`（恢复默认思考），但 token 与耗时将显著上升，且按铁律需先跑评测回归。
 - **影响范围**：仅临时全 DeepSeek 配置；决策④的 `models.yaml` 未改；恢复双供应商时需重新评估。
 
+## 2026-10-26 · 网页端「深度思考」开关（运行时可切换）
+
+- **需求**：用户希望在网页端自主选择是否使用深度思考；不部署公网，仅本地/演示环境使用。
+- **实现链**：
+  1. 前端顶栏新增「深度思考：开 / 关」开关，设置保存在本机 localStorage（`aia.thinkingMode.v1`，默认关）；
+  2. `client.js` 对**所有** `/api` 请求（含 SSE 流式、Markdown 下载）附带
+     `X-Thinking-Mode: enabled | disabled`；
+  3. 后端新增纯 ASGI 中间件 `ThinkingModeMiddleware` 解析该请求头，写入 `ContextVar`；
+  4. `model_router` 构造请求时读取 ContextVar：`enabled` 时覆盖为
+     `thinking={type:enabled, budget_tokens:4096}` + `effort=high`，并额外预留 8000 输出 tokens
+     （reasoning + 正文；该端点 reasoning 实测可达 5–7K，需避免 JSON 被挤空）；`disabled` 时强制关闭思考。
+- **语义**：开关只影响**之后的请求**，已创建会话 / 历史报告不回溯；开启后更慢、消耗更多 token。
+- **契约**：`docs/api.md` 增加可选请求头说明；15 条接口路径与字段不变。
+- **验证**：
+  - 单元测试：ContextVar 覆盖、请求头 → ContextVar 映射、`extra_body` 透传（全仓 318 passed）；
+  - 真实对比（同一份示例简历诊断）：关闭思考 13.2s / 无 reasoning；开启思考 74.0s，
+    `prompt=2147 / completion=5203 / reasoning=4244`，返回结构化 6 条问题（未降级）；
+  - 说明：思考深度由模型自行决定，简单任务（如面试首问）即使开启也可能不产生 reasoning，
+    属模型行为；token 日志会显示 `reasoning_tokens` 便于观察。
+
 ## 关键决策点总览
 
 | # | 决策点 | 结论 | 状态 |

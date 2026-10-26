@@ -27,6 +27,37 @@ export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_BASE_U
 /** 是否使用 Mock 数据层：默认 true；真实联调设 VITE_USE_MOCK=false */
 export const isMockMode = String(import.meta.env.VITE_USE_MOCK ?? 'true').toLowerCase() !== 'false'
 
+/**
+ * 深度思考开关（全局，localStorage 持久化；默认关闭，与后端临时 DeepSeek 配置一致）。
+ * 开启后每次模型调用会带请求头 X-Thinking-Mode: enabled —— 可能更准，但更慢、更耗 token。
+ */
+const THINKING_MODE_KEY = 'aia.thinkingMode.v1'
+
+export function getThinkingMode() {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(THINKING_MODE_KEY) === 'on'
+    }
+  } catch {
+    // 隐私模式 / 禁用 localStorage 时回退关闭
+  }
+  return false
+}
+
+export function setThinkingMode(enabled) {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(THINKING_MODE_KEY, enabled ? 'on' : 'off')
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function thinkingHeaders() {
+  return { 'X-Thinking-Mode': getThinkingMode() ? 'enabled' : 'disabled' }
+}
+
 /** 错误码 → 用户可读提示（docs/api.md 错误码表） */
 const CODE_MESSAGES = {
   1001: '参数校验失败，请检查输入',
@@ -135,7 +166,7 @@ export async function request(path, { method = 'GET', body, headers = {}, signal
   try {
     const requestInit = {
       method,
-      headers: { Accept: 'application/json', ...headers },
+      headers: { Accept: 'application/json', ...thinkingHeaders(), ...headers },
       signal: scope.signal,
     }
     if (body instanceof FormData) {
@@ -202,7 +233,7 @@ export async function streamRequest(path, { body, onEvent, signal, timeoutMs = 1
     try {
       response = await fetch(buildUrl(path), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', ...thinkingHeaders() },
         body: JSON.stringify(body ?? {}),
         signal: scope.signal,
       })
@@ -413,7 +444,7 @@ export const http = {
       let response
       try {
         response = await fetch(buildUrl(`/api/report/${encodeURIComponent(reportId)}/markdown`), {
-          headers: { Accept: 'text/markdown' },
+          headers: { Accept: 'text/markdown', ...thinkingHeaders() },
           signal: scope.signal,
         })
       } catch (error) {
